@@ -53,9 +53,12 @@
   <h1 style="margin-bottom:18px">Connexion</h1>
   <div class="card">
     <div id="step-email">
-      <p class="note" style="margin-top:0">Entre ton email. Tu recevras un <b>lien de connexion</b> — pas de mot de passe. Clique sur le lien <b>depuis cet appareil</b> : tu te connectes une fois, l'app retient ta session ensuite.</p>
+      <p class="note" style="margin-top:0">Connecte-toi avec ton email et ton mot de passe.</p>
       <input id="email" type="email" inputmode="email" placeholder="ton@email.fr" autocomplete="email" />
-      <button id="loginBtn" class="btn" style="margin-top:10px">Recevoir le lien</button>
+      <input id="pwd" type="password" placeholder="Mot de passe" autocomplete="current-password" style="margin-top:8px"/>
+      <button id="pwdBtn" class="btn" style="margin-top:10px">Se connecter</button>
+      <p class="note" style="margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)">Pas encore de mot de passe ou oublié ? Connexion par email :</p>
+      <button id="loginBtn" class="chip" style="margin-top:8px;width:100%">Recevoir le lien par email</button>
       <div id="pasteLinkZone" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <p class="note" style="margin:0 0 8px"><b>Depuis l'app installée :</b> n'ouvre pas le lien de l'email. Reste appuyé dessus → <b>Copier le lien</b>, puis colle-le ici :</p>
         <input id="magicPaste" type="url" placeholder="Colle le lien ici" autocomplete="off"/>
@@ -166,6 +169,15 @@
   <p class="note" style="text-align:center;margin-top:24px;line-height:1.6">
     Douleur tendineuse qui revient → remonte les calories vers la maintenance.<br>Le tendon passe avant l'esthétique.
   </p>
+  <div class="card" id="pwdCard">
+    <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🔐 Mot de passe</div>
+    <p class="note" style="margin-top:0">Définis un mot de passe pour te connecter directement (plus besoin d'email ni de lien).</p>
+    <div style="display:flex;gap:8px">
+      <input id="newPwd" type="password" placeholder="6 caractères minimum" autocomplete="new-password" style="flex:1"/>
+      <button id="setPwdBtn" class="btn" style="width:auto;padding:0 18px">Enregistrer</button>
+    </div>
+    <p id="pwdMsg" class="note" style="margin-bottom:0"></p>
+  </div>
   <p class="note" id="verApp" style="text-align:center"></p>
 </div>
 
@@ -177,7 +189,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v15", APP_BUILD = "04/06/2026 18:45";
+const APP_VERSION = "v16", APP_BUILD = "04/06/2026 19:30";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 const KCAL_T = 1950, PROT_T = 150;
@@ -209,6 +221,18 @@ function showAuth(){
   }
 }
 function showApp(){ $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); }
+
+$("pwdBtn").onclick = async () => {
+  const email = $("email").value.trim(), pwd = $("pwd").value;
+  if(!email || !pwd){ $("authMsg").textContent = "Entre ton email et ton mot de passe."; return; }
+  $("pwdBtn").disabled = true; $("authMsg").textContent = "Connexion…";
+  localStorage.setItem("lastEmail", email);
+  const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  $("pwdBtn").disabled = false;
+  if(error){ $("authMsg").textContent = "⚠ Email ou mot de passe incorrect. (Pas encore de mot de passe ? Utilise « Recevoir le lien par email » puis définis-le dans l'app.)"; }
+  // succès → onAuthStateChange affiche l'app
+};
+$("pwd").addEventListener("keydown", e => { if(e.key === "Enter") $("pwdBtn").click(); });
 
 $("loginBtn").onclick = async () => {
   if(!configured){ $("configWarn").classList.remove("hidden"); return; }
@@ -257,6 +281,16 @@ if(sb){
 } else { showAuth(); }
 
 $("logout").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+$("setPwdBtn").onclick = async () => {
+  const p = $("newPwd").value;
+  if(p.length < 6){ $("pwdMsg").textContent = "⚠ 6 caractères minimum."; return; }
+  $("setPwdBtn").disabled = true; $("pwdMsg").textContent = "Enregistrement…";
+  const { error } = await sb.auth.updateUser({ password: p });
+  $("setPwdBtn").disabled = false;
+  if(error){ $("pwdMsg").textContent = "⚠ Erreur : " + error.message; }
+  else { $("pwdMsg").textContent = "✅ Mot de passe enregistré ! Tu peux maintenant te connecter avec sur tous tes appareils."; $("newPwd").value = ""; }
+};
 
 // ── INIT / LOAD ───────────────────────────────────────
 async function init(){
