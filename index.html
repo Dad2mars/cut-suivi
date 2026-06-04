@@ -59,7 +59,7 @@
       <div id="pasteLinkZone" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <p class="note" style="margin:0 0 8px"><b>Depuis l'app installée :</b> n'ouvre pas le lien de l'email. Reste appuyé dessus → <b>Copier le lien</b>, puis colle-le ici :</p>
         <input id="magicPaste" type="url" placeholder="Colle le lien ici" autocomplete="off"/>
-        <button id="magicPasteBtn" class="btn" style="margin-top:8px">Se connecter avec le lien</button>
+        <button id="magicPasteBtn" class="btn" style="margin-top:8px">📋 Se connecter avec le lien copié</button>
       </div>
     </div>
     <p id="authMsg" class="note" style="margin-bottom:0"></p>
@@ -177,7 +177,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v14", APP_BUILD = "04/06/2026 17:45";
+const APP_VERSION = "v15", APP_BUILD = "04/06/2026 18:45";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 const KCAL_T = 1950, PROT_T = 150;
@@ -230,16 +230,21 @@ $("loginBtn").onclick = async () => {
 };
 
 $("magicPasteBtn").onclick = async () => {
-  const raw = $("magicPaste").value.trim();
-  if(!raw) return;
+  $("authMsg").textContent = "Vérification…";
+  let raw = $("magicPaste").value.trim();
+  // Champ vide → lecture automatique du presse-papier (l'utilisateur vient de copier le lien)
+  if(!raw && navigator.clipboard && navigator.clipboard.readText){
+    try{ raw = (await navigator.clipboard.readText()).trim(); if(raw) $("magicPaste").value = raw; }catch(_){}
+  }
+  if(!raw){ $("authMsg").textContent = "⚠ Rien à vérifier : copie d'abord le lien de l'email (appui long → Copier le lien), puis retape ce bouton."; return; }
   let tokenHash = null;
   try{ tokenHash = new URL(raw).searchParams.get("token"); }catch(_){}
-  if(!tokenHash){ $("authMsg").textContent = "Lien invalide. Copie bien le lien complet de l'email."; return; }
+  if(!tokenHash){ $("authMsg").textContent = "⚠ Ce n'est pas le bon lien. Copie le lien complet du bouton « Sign in » de l'email."; return; }
   $("magicPasteBtn").disabled = true;
   let { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "email" });
   if(error){ const r = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" }); error = r.error; }
   $("magicPasteBtn").disabled = false;
-  if(error){ $("authMsg").textContent = "Lien expiré ou déjà utilisé (ne l'ouvre pas avant de le coller). Redemande un lien."; }
+  if(error){ $("authMsg").textContent = "⚠ Lien expiré ou déjà utilisé. Demande un NOUVEAU lien, copie celui du DERNIER email (sans l'ouvrir) et réessaie."; }
   // succès → onAuthStateChange affiche l'app, session conservée dans l'app installée
 };
 
