@@ -1,4 +1,4 @@
-const CACHE = "cut-v11";
+const CACHE = "cut-v13";
 const SHELL = ["./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
