@@ -229,7 +229,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v17", APP_BUILD = "04/06/2026 20:15";
+const APP_VERSION = "v17", APP_BUILD = "04/06/2026 20:30";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -568,7 +568,7 @@ function renderAiItems(items, tag){
   const all = document.createElement("button");
   all.className = "btn"; all.style.marginTop = "10px";
   const close = document.createElement("button");
-  close.className = "chip"; close.style.cssText = "margin-top:8px;width:100%"; close.textContent = "Fermer";
+  close.className = "chip"; close.style.cssText = "margin-top:8px;width:100%"; close.textContent = "Effacer la liste";
   close.onclick = () => { box.innerHTML = ""; $("foodQuery").value = ""; };
   function refreshAll(){
     const rest = items.length - added;
