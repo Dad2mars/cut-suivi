@@ -84,13 +84,16 @@
 
   <!-- ÉCRAN AUJOURD'HUI -->
   <div id="screen-today">
-    <div class="row" style="align-items:flex-start">
-      <div>
-        <div class="eyebrow">Cut · objectif 70kg / 15% MG</div>
-        <h1 id="dayTitle"></h1>
-      </div>
+    <div class="row" style="align-items:center">
+      <div class="eyebrow">Cut · objectif 70kg / 15% MG</div>
       <button id="gotoSettings" class="x" title="Réglages" style="font-size:20px">⚙︎</button>
     </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+      <button id="prevDay" class="x" style="font-size:16px;padding:6px 10px">◀</button>
+      <h1 id="dayTitle" style="flex:1;text-align:center;font-size:21px"></h1>
+      <button id="nextDay" class="x" style="font-size:16px;padding:6px 10px">▶</button>
+    </div>
+    <button id="todayChip" class="chip hidden" style="width:100%;margin-top:6px">↩ Revenir à aujourd'hui</button>
 
     <!-- Résumé compact -->
     <div class="card" style="margin-top:14px;display:flex;gap:16px;align-items:center">
@@ -132,7 +135,12 @@
   <!-- ÉCRAN POIDS -->
   <div id="screen-weight" class="hidden">
     <div class="eyebrow" style="margin-bottom:4px">Suivi</div>
-    <h1 style="margin-bottom:18px">Poids</h1>
+    <h1 style="margin-bottom:18px">Évolution</h1>
+    <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px">🔥 Calories · 14 derniers jours</div>
+      <svg id="kcalChart" viewBox="0 0 260 110" style="width:100%;height:130px" preserveAspectRatio="none"></svg>
+      <p class="note" style="margin-bottom:0">Vert = dans l'objectif · Orange = dépassement · Ligne pointillée = ton objectif</p>
+    </div>
     <div class="card">
       <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px">Pesée du matin à jeun</div>
       <div style="display:flex;gap:10px;margin-bottom:18px">
@@ -229,7 +237,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v17", APP_BUILD = "04/06/2026 20:30";
+const APP_VERSION = "v18", APP_BUILD = "04/06/2026 20:50";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -242,6 +250,7 @@ const STAPLES = [
   ["Banane (1)",105,1,27,0],["Thon nature (100g)",116,26,0,1],["Skyr (150g)",96,17,6,0],
 ];
 const today = () => new Date().toISOString().slice(0,10);
+let viewDay = today();
 const $ = id => document.getElementById(id);
 const configured = SUPABASE_URL.startsWith("http") && SUPABASE_ANON.length > 20;
 
@@ -335,8 +344,51 @@ $("setPwdBtn").onclick = async () => {
 };
 
 // ── INIT / LOAD ───────────────────────────────────────
+function fmtDay(d){ return new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}); }
+function renderDayTitle(){
+  $("dayTitle").textContent = viewDay === today() ? fmtDay(viewDay) : fmtDay(viewDay);
+  $("todayChip").classList.toggle("hidden", viewDay === today());
+  const fut = viewDay >= today();
+  $("nextDay").style.opacity = fut ? .25 : 1;
+}
+async function changeDay(n){
+  const dt = new Date(viewDay+"T12:00:00"); dt.setDate(dt.getDate()+n);
+  const nd = dt.toISOString().slice(0,10);
+  if(nd > today()) return;
+  viewDay = nd; renderDayTitle(); await loadEntries();
+}
+$("prevDay").onclick = ()=>changeDay(-1);
+$("nextDay").onclick = ()=>changeDay(1);
+$("todayChip").onclick = async ()=>{ viewDay = today(); renderDayTitle(); await loadEntries(); };
+
+async function loadHistory(){
+  const since = new Date(Date.now()-13*864e5).toISOString().slice(0,10);
+  const { data } = await sb.from("food_entries").select("day,kcal").gte("day", since);
+  const agg = {};
+  (data||[]).forEach(r=>{ agg[r.day]=(agg[r.day]||0)+r.kcal; });
+  const days=[];
+  for(let i=13;i>=0;i--){ const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10); days.push({d, k: agg[d]||0}); }
+  renderKcalChart(days);
+}
+function renderKcalChart(days){
+  const svg = $("kcalChart"); if(!svg) return;
+  const W=260, H=110, bw=W/14;
+  const mx = Math.max(KCAL_T*1.15, ...days.map(x=>x.k));
+  const gy = H-12-(KCAL_T/mx)*(H-34);
+  let out = `<line x1="0" y1="${gy.toFixed(1)}" x2="${W}" y2="${gy.toFixed(1)}" stroke="var(--dim)" stroke-width="1" stroke-dasharray="4 3" opacity=".55"/>`;
+  days.forEach((x,i)=>{
+    const h = x.k ? Math.max(3,(x.k/mx)*(H-34)) : 0;
+    const c = x.k===0 ? "var(--line)" : x.k>KCAL_T+100 ? "var(--warn)" : "var(--accent)";
+    if(h) out += `<rect x="${(i*bw+3).toFixed(1)}" y="${(H-12-h).toFixed(1)}" width="${(bw-6).toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${c}"/>`;
+    if(i%2===1) out += `<text x="${(i*bw+bw/2).toFixed(1)}" y="${H-1}" text-anchor="middle" font-size="7.5" fill="var(--dim)">${new Date(x.d+"T12:00:00").getDate()}</text>`;
+  });
+  out += `<text x="${W-2}" y="${(gy-4).toFixed(1)}" text-anchor="end" font-size="8" fill="var(--dim)">objectif ${KCAL_T}</text>`;
+  svg.innerHTML = out;
+}
+
 async function init(){
-  $("dayTitle").textContent = new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+  renderDayTitle();
+  loadHistory();
   renderHabits();
   $("gKcal").value = KCAL_T; $("gProt").value = PROT_T;
   await loadEntries();
@@ -344,7 +396,7 @@ async function init(){
 }
 
 async function loadEntries(){
-  const { data } = await sb.from("food_entries").select("*").eq("day", today()).order("created_at");
+  const { data } = await sb.from("food_entries").select("*").eq("day", viewDay).order("created_at");
   entries = data || [];
   renderEntries();
 }
@@ -356,7 +408,7 @@ async function loadWeights(){
 
 // ── REPAS ─────────────────────────────────────────────
 async function addEntry(label, kcal, prot, carbs, fat){
-  const row = { day: today(), label, kcal: Math.round(kcal), prot: Math.round(prot), carbs: Math.round(carbs), fat: Math.round(fat) };
+  const row = { day: viewDay, label, kcal: Math.round(kcal), prot: Math.round(prot), carbs: Math.round(carbs), fat: Math.round(fat) };
   const { data, error } = await sb.from("food_entries").insert(row).select();
   if(!error && data){ entries.push(data[0]); renderEntries(); bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat); }
 }
@@ -403,7 +455,7 @@ function showScreen(n){
   window.scrollTo(0,0);
 }
 $("navToday").onclick = ()=>showScreen("today");
-$("navWeight").onclick = ()=>showScreen("weight");
+$("navWeight").onclick = ()=>{ showScreen("weight"); loadHistory(); };
 $("gotoSettings").onclick = ()=>showScreen("settings");
 function openSheet(){ $("sheetOverlay").classList.remove("hidden"); renderHabits(); }
 function closeSheet(){ $("sheetOverlay").classList.add("hidden"); }
@@ -814,6 +866,8 @@ const COACH_TIPS = [
 ];
 function renderCoach(tot){
   const el = $("coachPace"); if(!el) return;
+  $("coachLine").classList.toggle("hidden", viewDay !== today());
+  if(viewDay !== today()) return;
   const now = new Date(); const h = now.getHours() + now.getMinutes()/60;
   const START = 7, END = 21.5;
   const frac = Math.min(1, Math.max(0, (h-START)/(END-START)));
