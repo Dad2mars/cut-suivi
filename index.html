@@ -43,6 +43,14 @@
   .tabbtn{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:10px;font-size:13px;font-weight:600}
   .tabbtn.on{background:var(--accentDim);border-color:var(--accent);color:var(--accent)}
   .note{font-size:12px;color:var(--dim);line-height:1.5}
+  body{padding-bottom:96px}
+  #tabbar{position:fixed;bottom:0;left:0;right:0;margin:0 auto;max-width:460px;background:var(--card);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding:6px 0 max(10px,env(safe-area-inset-bottom));z-index:50}
+  .navbtn{background:none;border:none;color:var(--dim);font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 18px}
+  .navbtn.on{color:var(--accent)}
+  .navbtn .ic{font-size:20px;line-height:1}
+  #fabAdd{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:30px;line-height:1;margin-top:-34px;box-shadow:0 4px 14px rgba(16,185,129,.45);font-weight:700}
+  #sheetOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+  #sheet{background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px max(20px,env(safe-area-inset-bottom));width:100%;max-width:460px;max-height:88vh;overflow-y:auto}
 </style>
 </head>
 <body>
@@ -73,112 +81,144 @@
 
 <!-- APP -->
 <div id="app" class="hidden">
-  <div class="row" style="align-items:flex-start">
-    <div>
-      <div class="eyebrow">Cut · objectif 70kg / 15% MG</div>
-      <h1 id="dayTitle"></h1>
-    </div>
-    <button id="logout" class="x" title="Déconnexion" style="font-size:13px">⎋</button>
-  </div>
 
-  <!-- Macros -->
-  <div class="card" style="margin-top:14px">
-    <div class="row"><span class="dim" style="font-size:13px">Calories</span>
-      <span class="mono" style="font-size:15px"><b id="kcalNow">0</b><span class="dim"> / 1950</span></span></div>
-    <div class="bar"><div id="kcalBar" style="width:0;background:var(--accent)"></div></div>
-    <div class="row" style="margin-top:16px"><span class="dim" style="font-size:13px">Protéines</span>
-      <span class="mono" style="font-size:15px"><b id="protNow">0</b><span class="dim"> / 150g</span></span></div>
-    <div class="bar"><div id="protBar" style="width:0;background:var(--good)"></div></div>
-    <div class="mono dim" style="display:flex;gap:16px;margin-top:14px;font-size:12px">
-      <span>Glucides <b id="carbNow" style="color:var(--txt)">0g</b></span>
-      <span>Lipides <b id="fatNow" style="color:var(--txt)">0g</b></span>
-    </div>
-  </div>
-
-  <!-- Coach -->
-  <div class="card" id="coachCard">
-    <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🎯 Coach</div>
-    <div id="coachPace" style="font-size:14px;font-weight:600;line-height:1.45;margin-bottom:8px"></div>
-    <div id="coachRest" class="note" style="margin-bottom:8px"></div>
-    <div id="coachProt" class="note hidden" style="color:var(--warn);margin-bottom:8px"></div>
-    <div id="coachTip" class="note" style="padding-top:8px;border-top:1px solid var(--line)"></div>
-  </div>
-
-  <!-- Ajout repas -->
-  <div class="card">
-    <div style="display:flex;gap:6px;margin-bottom:12px">
-      <button class="tabbtn on" data-tab="search">Rechercher</button>
-      <button class="tabbtn" data-tab="quick">Raccourcis</button>
-      <button class="tabbtn" data-tab="manual">Manuel</button>
+  <!-- ÉCRAN AUJOURD'HUI -->
+  <div id="screen-today">
+    <div class="row" style="align-items:flex-start">
+      <div>
+        <div class="eyebrow">Cut · objectif 70kg / 15% MG</div>
+        <h1 id="dayTitle"></h1>
+      </div>
+      <button id="gotoSettings" class="x" title="Réglages" style="font-size:20px">⚙︎</button>
     </div>
 
-    <div id="tab-search">
+    <!-- Résumé compact -->
+    <div class="card" style="margin-top:14px;display:flex;gap:16px;align-items:center">
+      <svg width="84" height="84" viewBox="0 0 64 64" style="flex-shrink:0">
+        <circle cx="32" cy="32" r="26" fill="none" stroke="var(--line)" stroke-width="7"/>
+        <circle id="ringFg" cx="32" cy="32" r="26" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" transform="rotate(-90 32 32)" style="stroke-dasharray:0 164;transition:stroke-dasharray .4s"/>
+        <text id="kcalNow" x="32" y="31" text-anchor="middle" font-size="13" font-weight="700" fill="var(--txt)" font-family="var(--mono)">0</text>
+        <text id="kcalGoal" x="32" y="43" text-anchor="middle" font-size="8.5" fill="var(--dim)" font-family="var(--mono)">/1950</text>
+      </svg>
+      <div style="flex:1;min-width:0">
+        <div class="row" style="font-size:12px"><span class="dim">Protéines</span>
+          <span class="mono"><b id="protNow">0g</b><span class="dim" id="protGoal"> / 150g</span></span></div>
+        <div class="bar" style="margin-top:5px"><div id="protBar" style="width:0;background:var(--good)"></div></div>
+        <div class="mono dim" style="display:flex;gap:14px;margin-top:10px;font-size:12px">
+          <span>G <b id="carbNow" style="color:var(--txt)">0g</b></span>
+          <span>L <b id="fatNow" style="color:var(--txt)">0g</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coach : 1 ligne, tap pour le détail -->
+    <div class="card" id="coachLine" style="padding:12px 16px;cursor:pointer">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="coachPace" style="font-size:13px;font-weight:600;line-height:1.4;flex:1"></div>
+        <span class="dim" id="coachChev" style="font-size:12px">▾</span>
+      </div>
+      <div id="coachDetail" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+        <div id="coachRest" class="note" style="margin-bottom:8px"></div>
+        <div id="coachProt" class="note hidden" style="color:var(--warn);margin-bottom:8px"></div>
+        <div id="coachTip" class="note"></div>
+      </div>
+    </div>
+
+    <!-- Journal -->
+    <div id="entries" style="margin-bottom:16px"></div>
+    <p class="note" style="padding:0 4px 8px;text-align:center">Appuie sur <b style="color:var(--accent)">+</b> pour ajouter un repas — écris, dicte ou photographie.</p>
+  </div>
+
+  <!-- ÉCRAN POIDS -->
+  <div id="screen-weight" class="hidden">
+    <div class="eyebrow" style="margin-bottom:4px">Suivi</div>
+    <h1 style="margin-bottom:18px">Poids</h1>
+    <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px">Pesée du matin à jeun</div>
+      <div style="display:flex;gap:10px;margin-bottom:18px">
+        <input id="wInput" inputmode="decimal" placeholder="74.0" />
+        <button id="wBtn" class="btn" style="width:auto;padding:0 20px">Ajouter</button>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:16px">
+        <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
+          <div class="dim" style="font-size:11px;margin-bottom:4px">Moyenne 7 jours</div>
+          <div class="mono" style="font-size:24px;font-weight:700"><span id="avg7">—</span><span class="dim" style="font-size:13px"> kg</span></div>
+        </div>
+        <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
+          <div class="dim" style="font-size:11px;margin-bottom:4px">Tendance / sem.</div>
+          <div id="trend" class="mono dim" style="font-size:24px;font-weight:700">—</div>
+        </div>
+      </div>
+      <svg id="spark" viewBox="0 0 260 80" style="width:100%;height:80px" preserveAspectRatio="none"></svg>
+      <div id="trendMsg" class="note hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"></div>
+    </div>
+    <p class="note" style="text-align:center;margin-top:16px;line-height:1.6">
+      Douleur tendineuse qui revient → remonte les calories vers la maintenance.<br>Le tendon passe avant l'esthétique.
+    </p>
+  </div>
+
+  <!-- ÉCRAN RÉGLAGES -->
+  <div id="screen-settings" class="hidden">
+    <div class="eyebrow" style="margin-bottom:4px">App</div>
+    <h1 style="margin-bottom:18px">Réglages</h1>
+    <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🎯 Objectifs du jour</div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label class="note">Calories</label><input id="gKcal" type="number" inputmode="numeric"/></div>
+        <div style="flex:1"><label class="note">Protéines (g)</label><input id="gProt" type="number" inputmode="numeric"/></div>
+      </div>
+      <button id="saveGoals" class="btn" style="margin-top:12px">Enregistrer les objectifs</button>
+      <p class="note" style="margin-bottom:0">Le coach et les barres s'adaptent immédiatement.</p>
+    </div>
+    <div class="card" id="pwdCard">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🔐 Mot de passe</div>
+      <p class="note" style="margin-top:0">Pour te connecter directement, sans email ni lien.</p>
       <div style="display:flex;gap:8px">
-        <input id="foodQuery" placeholder="ex : 2 barquettes lu, 150g riz…" style="flex:1"/>
-        <button id="micBtn" class="chip hidden" style="padding:0 16px;font-size:18px" title="Dicter">🎤</button>
-        <button id="photoBtn" class="chip" style="padding:0 16px;font-size:18px" title="Photo du repas">📷</button>
+        <input id="newPwd" type="password" placeholder="6 caractères minimum" autocomplete="new-password" style="flex:1"/>
+        <button id="setPwdBtn" class="btn" style="width:auto;padding:0 18px">Enregistrer</button>
+      </div>
+      <p id="pwdMsg" class="note" style="margin-bottom:0"></p>
+    </div>
+    <button id="logout" class="chip" style="width:100%;padding:12px;color:var(--red);border-color:var(--red)">Se déconnecter</button>
+    <p class="note" id="verApp" style="text-align:center;margin-top:16px"></p>
+  </div>
+
+  <!-- FEUILLE D'AJOUT -->
+  <div id="sheetOverlay" class="hidden">
+    <div id="sheet">
+      <div style="width:38px;height:4px;background:var(--line);border-radius:99px;margin:0 auto 14px"></div>
+      <div style="display:flex;gap:8px">
+        <input id="foodQuery" placeholder="ex : 3 œufs et 150g de riz…" style="flex:1"/>
+        <button id="micBtn" class="chip hidden" style="padding:0 14px;font-size:18px" title="Dicter">🎤</button>
+        <button id="photoBtn" class="chip" style="padding:0 14px;font-size:18px" title="Photo du repas">📷</button>
         <input id="photoInput" type="file" accept="image/*" capture="environment" class="hidden"/>
       </div>
-      <button id="searchBtn" class="btn" style="margin-top:10px">Chercher dans la base</button>
-      <button id="aiBtn" class="btn" style="margin-top:8px;background:#0ea5e9;box-shadow:0 1px 2px rgba(14,165,233,.3)">✨ Repas complet (IA)</button>
+      <button id="smartBtn" class="btn" style="margin-top:10px">Ajouter au journal</button>
       <p id="queueInfo" class="note hidden" style="margin:6px 0 0"></p>
       <div id="searchResults"></div>
-    </div>
-
-    <div id="tab-quick" class="hidden">
-      <div id="quickChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-    </div>
-
-    <div id="tab-manual" class="hidden">
-      <input id="mLabel" placeholder="Nom de l'aliment" />
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <input id="mKcal" type="number" placeholder="kcal" />
-        <input id="mProt" type="number" placeholder="P (g)" />
-        <input id="mCarb" type="number" placeholder="G (g)" />
-        <input id="mFat" type="number" placeholder="L (g)" />
+      <p class="note hidden" id="habitTitle" style="margin:14px 0 6px;font-weight:600">Tes habituels</p>
+      <div id="habitChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <button id="manualToggle" class="chip" style="margin-top:14px;width:100%">Saisie manuelle (kcal et macros connus)</button>
+      <div id="manualZone" class="hidden" style="margin-top:10px">
+        <input id="mLabel" placeholder="Nom de l'aliment" />
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="mKcal" type="number" placeholder="kcal" />
+          <input id="mProt" type="number" placeholder="P (g)" />
+          <input id="mCarb" type="number" placeholder="G (g)" />
+          <input id="mFat" type="number" placeholder="L (g)" />
+        </div>
+        <button id="manualAdd" class="btn" style="margin-top:10px">Ajouter</button>
       </div>
-      <button id="manualAdd" class="btn" style="margin-top:10px">Ajouter</button>
+      <button id="sheetClose" class="chip" style="margin-top:14px;width:100%">Fermer</button>
     </div>
   </div>
 
-  <!-- Liste repas -->
-  <div id="entries" style="margin-bottom:24px"></div>
-  <p class="note" style="padding:0 4px 24px">Produit de marque → recherche la vraie valeur. Légumes verts ≈ illimités. Shabbat : vise la maintenance, ne compense pas le lendemain.</p>
-
-  <!-- Poids -->
-  <div class="card">
-    <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px">Poids · pesée du matin à jeun</div>
-    <div style="display:flex;gap:10px;margin-bottom:18px">
-      <input id="wInput" inputmode="decimal" placeholder="74.0" />
-      <button id="wBtn" class="btn" style="width:auto;padding:0 20px">Ajouter</button>
-    </div>
-    <div style="display:flex;gap:12px;margin-bottom:16px">
-      <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
-        <div class="dim" style="font-size:11px;margin-bottom:4px">Moyenne 7 jours</div>
-        <div class="mono" style="font-size:24px;font-weight:700"><span id="avg7">—</span><span class="dim" style="font-size:13px"> kg</span></div>
-      </div>
-      <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
-        <div class="dim" style="font-size:11px;margin-bottom:4px">Tendance / sem.</div>
-        <div id="trend" class="mono dim" style="font-size:24px;font-weight:700">—</div>
-      </div>
-    </div>
-    <svg id="spark" viewBox="0 0 260 56" style="width:100%;height:56px" preserveAspectRatio="none"></svg>
-    <div id="trendMsg" class="note hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"></div>
+  <!-- TAB BAR -->
+  <div id="tabbar">
+    <button class="navbtn on" id="navToday"><span class="ic">🏠</span>Aujourd'hui</button>
+    <button id="fabAdd" title="Ajouter un repas">+</button>
+    <button class="navbtn" id="navWeight"><span class="ic">⚖️</span>Poids</button>
   </div>
-
-  <p class="note" style="text-align:center;margin-top:24px;line-height:1.6">
-    Douleur tendineuse qui revient → remonte les calories vers la maintenance.<br>Le tendon passe avant l'esthétique.
-  </p>
-  <div class="card" id="pwdCard">
-    <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🔐 Mot de passe</div>
-    <p class="note" style="margin-top:0">Définis un mot de passe pour te connecter directement (plus besoin d'email ni de lien).</p>
-    <div style="display:flex;gap:8px">
-      <input id="newPwd" type="password" placeholder="6 caractères minimum" autocomplete="new-password" style="flex:1"/>
-      <button id="setPwdBtn" class="btn" style="width:auto;padding:0 18px">Enregistrer</button>
-    </div>
-    <p id="pwdMsg" class="note" style="margin-bottom:0"></p>
-  </div>
-  <p class="note" id="verApp" style="text-align:center"></p>
 </div>
 
 <script type="module">
@@ -189,10 +229,12 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v16", APP_BUILD = "04/06/2026 19:30";
+const APP_VERSION = "v17", APP_BUILD = "04/06/2026 20:15";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
-const KCAL_T = 1950, PROT_T = 150;
+let GOALS = {kcal:1950, prot:150};
+try{ GOALS = Object.assign(GOALS, JSON.parse(localStorage.getItem("goals")||"{}")); }catch(_){}
+let KCAL_T = GOALS.kcal, PROT_T = GOALS.prot;
 const STAPLES = [
   ["Fromage blanc 0% (100g)",47,8,4,0],["Œuf (1)",72,6,0,5],["Poulet grillé (100g)",165,31,0,4],
   ["Riz cuit (100g)",130,3,28,0],["Saumon (100g)",208,20,0,13],["Whey (1 dose 30g)",113,24,2,1],
@@ -295,7 +337,8 @@ $("setPwdBtn").onclick = async () => {
 // ── INIT / LOAD ───────────────────────────────────────
 async function init(){
   $("dayTitle").textContent = new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
-  buildQuick();
+  renderHabits();
+  $("gKcal").value = KCAL_T; $("gProt").value = PROT_T;
   await loadEntries();
   await loadWeights();
 }
@@ -315,7 +358,7 @@ async function loadWeights(){
 async function addEntry(label, kcal, prot, carbs, fat){
   const row = { day: today(), label, kcal: Math.round(kcal), prot: Math.round(prot), carbs: Math.round(carbs), fat: Math.round(fat) };
   const { data, error } = await sb.from("food_entries").insert(row).select();
-  if(!error && data){ entries.push(data[0]); renderEntries(); }
+  if(!error && data){ entries.push(data[0]); renderEntries(); bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat); }
 }
 async function delEntry(id){
   await sb.from("food_entries").delete().eq("id", id);
@@ -324,9 +367,14 @@ async function delEntry(id){
 
 function renderEntries(){
   const tot = entries.reduce((s,e)=>({kcal:s.kcal+e.kcal,prot:s.prot+e.prot,carbs:s.carbs+e.carbs,fat:s.fat+e.fat}),{kcal:0,prot:0,carbs:0,fat:0});
-  $("kcalNow").textContent = tot.kcal; $("kcalNow").style.color = tot.kcal>KCAL_T+100?"var(--warn)":"var(--txt)";
-  $("kcalBar").style.width = Math.min(100,tot.kcal/KCAL_T*100)+"%"; $("kcalBar").style.background = tot.kcal>KCAL_T+100?"var(--warn)":"var(--accent)";
+  $("kcalNow").textContent = tot.kcal;
+  $("kcalNow").setAttribute("fill", tot.kcal>KCAL_T+100?"var(--warn)":"var(--txt)");
+  $("kcalGoal").textContent = "/"+KCAL_T;
+  const RC = 163.4, rp = Math.min(1, tot.kcal/KCAL_T);
+  $("ringFg").style.strokeDasharray = (rp*RC).toFixed(1)+" "+RC;
+  $("ringFg").style.stroke = tot.kcal>KCAL_T+100?"var(--warn)":"var(--accent)";
   $("protNow").textContent = tot.prot+"g"; $("protNow").style.color = tot.prot>=PROT_T?"var(--good)":"var(--txt)";
+  $("protGoal").textContent = " / "+PROT_T+"g";
   $("protBar").style.width = Math.min(100,tot.prot/PROT_T*100)+"%";
   $("carbNow").textContent = tot.carbs+"g"; $("fatNow").textContent = tot.fat+"g";
   renderCoach(tot);
@@ -348,17 +396,48 @@ function renderEntries(){
 const esc = s => (s||"").replace(/[<>&]/g,m=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[m]));
 
 // ── ONGLETS ───────────────────────────────────────────
-document.querySelectorAll(".tabbtn").forEach(b=>b.onclick=()=>{
-  document.querySelectorAll(".tabbtn").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  ["search","quick","manual"].forEach(t=>$("tab-"+t).classList.toggle("hidden", t!==b.dataset.tab));
-});
+function showScreen(n){
+  ["today","weight","settings"].forEach(x=>$("screen-"+x).classList.toggle("hidden", x!==n));
+  $("navToday").classList.toggle("on", n==="today");
+  $("navWeight").classList.toggle("on", n==="weight");
+  window.scrollTo(0,0);
+}
+$("navToday").onclick = ()=>showScreen("today");
+$("navWeight").onclick = ()=>showScreen("weight");
+$("gotoSettings").onclick = ()=>showScreen("settings");
+function openSheet(){ $("sheetOverlay").classList.remove("hidden"); renderHabits(); }
+function closeSheet(){ $("sheetOverlay").classList.add("hidden"); }
+$("fabAdd").onclick = openSheet;
+$("sheetClose").onclick = closeSheet;
+$("sheetOverlay").addEventListener("click", e=>{ if(e.target===$("sheetOverlay")) closeSheet(); });
+$("manualToggle").onclick = ()=>$("manualZone").classList.toggle("hidden");
+$("coachLine").onclick = ()=>{ $("coachDetail").classList.toggle("hidden"); $("coachChev").textContent = $("coachDetail").classList.contains("hidden")?"▾":"▴"; };
+$("saveGoals").onclick = ()=>{
+  const k = +$("gKcal").value||1950, p = +$("gProt").value||150;
+  GOALS = {kcal:k, prot:p}; KCAL_T = k; PROT_T = p;
+  localStorage.setItem("goals", JSON.stringify(GOALS));
+  toast("✅ Objectifs : "+k+" kcal · "+p+" g de protéines");
+  renderEntries();
+};
 
-// Raccourcis
-function buildQuick(){
-  const c = $("quickChips"); c.innerHTML="";
-  STAPLES.forEach(([n,k,p,g,f])=>{
-    const b=document.createElement("button"); b.className="chip"; b.textContent=n;
-    b.onclick=()=>addEntry(n,k,p,g,f); c.appendChild(b);
+// Habituels appris
+function getHabits(){ try{ return JSON.parse(localStorage.getItem("habits")||"{}"); }catch(_){ return {}; } }
+function bumpHabit(label, k, p, c, f){
+  const h = getHabits();
+  const key = label.replace(/\s*\(.*$/,"").toLowerCase().trim();
+  const e = h[key] || {n:0};
+  h[key] = {label, k, p, c, f, n:e.n+1, t:Date.now()};
+  localStorage.setItem("habits", JSON.stringify(h));
+}
+function renderHabits(){
+  const top = Object.values(getHabits()).sort((a,b)=>b.n-a.n || b.t-a.t).slice(0,8);
+  const c = $("habitChips"); c.innerHTML = "";
+  $("habitTitle").classList.toggle("hidden", !top.length);
+  top.forEach(e=>{
+    const b = document.createElement("button"); b.className = "chip";
+    b.textContent = e.label.replace(/\s*\(.*$/,"") + " · " + Math.round(e.k) + " kcal";
+    b.onclick = ()=>{ addEntry(e.label, e.k, e.p, e.c, e.f); toast("✓ Ajouté : "+e.label); };
+    c.appendChild(b);
   });
 }
 
@@ -371,7 +450,7 @@ $("manualAdd").onclick = async () => {
 };
 
 // Recherche OpenFoodFacts
-$("searchBtn").onclick = () => doSearch();
+$("smartBtn").onclick = () => smartAdd();
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 if(SR){
   $("micBtn").classList.remove("hidden");
@@ -383,7 +462,7 @@ if(SR){
     const t = e.results[0][0].transcript;
     micOff();                       // coupe le micro IMMÉDIATEMENT après capture
     $("foodQuery").value = t;
-    $("aiBtn").click();
+    smartAdd();
   };
   rec.onend = () => { listening = false; $("micBtn").textContent = "🎤"; clearTimeout(rec._to); };
   rec.onerror = () => { micOff(); $("queueInfo").classList.remove("hidden"); $("queueInfo").textContent = "Micro indisponible — utilise le micro du clavier."; };
@@ -394,7 +473,32 @@ if(SR){
     rec._to = setTimeout(() => { if(listening) micOff(); }, 12000);  // sécurité : coupe après 12 s max
   };
 }
-$("foodQuery").addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
+$("foodQuery").addEventListener("keydown", e=>{ if(e.key==="Enter") smartAdd(); });
+async function smartAdd(){
+  const q = $("foodQuery").value.trim(); if(!q) return;
+  $("queueInfo").classList.add("hidden");
+  const box = $("searchResults");
+  box.innerHTML = '<p class="note">Analyse…</p>';
+  $("smartBtn").disabled = true;
+  try{
+    const items = splitItems(q);
+    const resolved = await Promise.all(items.map(resolveItem));
+    const ok = resolved.filter(Boolean);
+    const missed = items.filter((_,i)=>!resolved[i]);
+    let aiItems = [];
+    if(missed.length){ try{ aiItems = await callAi({ text: missed.join(" et ") }); }catch(_){} }
+    const all = ok.concat(aiItems);
+    if(!all.length){
+      box.innerHTML = '<p class="note" style="color:var(--red)">Rien trouvé. Reformule, ou utilise la saisie manuelle ci-dessous.</p>';
+      $("manualZone").classList.remove("hidden");
+    } else {
+      renderAiItems(all, "");
+      const aiNames = new Set(aiItems.map(i=>i.name));
+      if(missed.length && !aiItems.length) box.insertAdjacentHTML("beforeend", `<p class="note" style="color:var(--warn)">Non trouvé : ${esc(missed.join(", "))}</p>`);
+    }
+  }catch(e){ box.innerHTML = '<p class="note" style="color:var(--red)">Erreur réseau. Réessaie.</p>'; }
+  $("smartBtn").disabled = false;
+}
 
 // ── PHOTO IA (Gemini via edge function) ──
 $("photoBtn").onclick = () => $("photoInput").click();
@@ -476,21 +580,7 @@ function renderAiItems(items, tag){
   box.appendChild(all); box.appendChild(close);
 }
 
-$("aiBtn").onclick = async () => {
-  const q = $("foodQuery").value.trim();
-  if(!q){ $("queueInfo").classList.remove("hidden"); $("queueInfo").textContent = "Écris ou dicte ton repas d'abord (ex : 3 oeufs, 150g de riz et une banane)"; return; }
-  const box = $("searchResults");
-  box.innerHTML = '<p class="note">✨ Analyse du repas en cours…</p>';
-  $("aiBtn").disabled = true;
-  try{
-    const items = await callAi({ text: q });
-    renderAiItems(items, "✨");
-  }catch(e){
-    box.innerHTML = `<p class="note" style="color:var(--red)">IA indisponible (${esc(e.message)}). J'utilise la recherche classique…</p>`;
-    setTimeout(()=>doSearch(), 800);
-  }
-  $("aiBtn").disabled = false;
-};
+
 async function compressImage(file, maxDim, q){
   const img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(file); });
   const sc = Math.min(1, maxDim/Math.max(img.width,img.height));
