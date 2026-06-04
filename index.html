@@ -177,7 +177,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v13", APP_BUILD = "04/06/2026 14:30";
+const APP_VERSION = "v14", APP_BUILD = "04/06/2026 17:45";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 const KCAL_T = 1950, PROT_T = 150;
@@ -201,9 +201,11 @@ function showAuth(){
   if(!configured) $("configWarn").classList.remove("hidden");
   const saved = localStorage.getItem("lastEmail");
   if(saved){ $("email").value = saved; }
-  // PWA écran d'accueil : stockage séparé de Safari → prévenir
+  // App installée (écran d'accueil) : instructions adaptées + zone de collage visible
   if(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches){
-    $("verLogin").textContent = "⚠ App installée : clique le lien de l'email puis reviens ici. " + $("verLogin").textContent;
+    const note = document.querySelector("#step-email .note");
+    if(note) note.innerHTML = "Entre ton email puis <b>Recevoir le lien</b>. Dans l'email reçu : <b>ne clique pas le lien</b> — reste appuyé dessus → <b>Copier le lien</b> → reviens ici et <b>colle-le ci-dessous</b>. À faire <b>une seule fois</b> : l'app retient ta session ensuite.";
+    $("pasteLinkZone").classList.remove("hidden");
   }
 }
 function showApp(){ $("auth").classList.add("hidden"); $("app").classList.remove("hidden"); }
