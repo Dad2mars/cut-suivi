@@ -50,7 +50,7 @@
   .navbtn .ic{font-size:20px;line-height:1}
   #fabAdd{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:30px;line-height:1;margin-top:-34px;box-shadow:0 4px 14px rgba(16,185,129,.45);font-weight:700}
   #sheetOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:flex;align-items:flex-end;justify-content:center}
-  #sheet{background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px max(20px,env(safe-area-inset-bottom));width:100%;max-width:460px;max-height:88vh;overflow-y:auto}
+  #sheet{background:var(--card);border-radius:20px 20px 0 0;padding:12px 16px max(20px,env(safe-area-inset-bottom));width:100%;max-width:460px;max-height:85dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 </style>
 </head>
 <body>
@@ -237,7 +237,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v18", APP_BUILD = "04/06/2026 20:50";
+const APP_VERSION = "v19", APP_BUILD = "04/06/2026 21:10";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -250,6 +250,13 @@ const STAPLES = [
   ["Banane (1)",105,1,27,0],["Thon nature (100g)",116,26,0,1],["Skyr (150g)",96,17,6,0],
 ];
 const today = () => new Date().toISOString().slice(0,10);
+function fetchT(url, opts={}, ms=9000){
+  const ctl = new AbortController();
+  const t = setTimeout(()=>ctl.abort(), ms);
+  return fetch(url, {...opts, signal: ctl.signal}).finally(()=>clearTimeout(t));
+}
+window.addEventListener("error", e => { try{ toast("⚠ Erreur : " + (e.message||"inconnue")); }catch(_){} });
+window.addEventListener("unhandledrejection", e => { try{ toast("⚠ Erreur réseau ou serveur"); }catch(_){} });
 let viewDay = today();
 const $ = id => document.getElementById(id);
 const configured = SUPABASE_URL.startsWith("http") && SUPABASE_ANON.length > 20;
@@ -410,7 +417,9 @@ async function loadWeights(){
 async function addEntry(label, kcal, prot, carbs, fat){
   const row = { day: viewDay, label, kcal: Math.round(kcal), prot: Math.round(prot), carbs: Math.round(carbs), fat: Math.round(fat) };
   const { data, error } = await sb.from("food_entries").insert(row).select();
-  if(!error && data){ entries.push(data[0]); renderEntries(); bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat); }
+  if(error){ toast("⚠ Ajout échoué (réseau ?) — réessaie"); return false; }
+  if(data){ entries.push(data[0]); renderEntries(); bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat); }
+  return true;
 }
 async function delEntry(id){
   await sb.from("food_entries").delete().eq("id", id);
@@ -496,6 +505,7 @@ function renderHabits(){
 // Manuel
 $("manualAdd").onclick = async () => {
   const l=$("mLabel").value.trim(); if(!l) return;
+  if($("manualAdd").disabled) return; $("manualAdd").disabled = true; setTimeout(()=>$("manualAdd").disabled=false, 1500);
   await addEntry(l, +$("mKcal").value||0, +$("mProt").value||0, +$("mCarb").value||0, +$("mFat").value||0);
   toast(`✓ Ajouté : ${l}`);
   ["mLabel","mKcal","mProt","mCarb","mFat"].forEach(i=>$(i).value="");
@@ -529,9 +539,10 @@ $("foodQuery").addEventListener("keydown", e=>{ if(e.key==="Enter") smartAdd(); 
 async function smartAdd(){
   const q = $("foodQuery").value.trim(); if(!q) return;
   $("queueInfo").classList.add("hidden");
+  $("foodQuery").blur();
   const box = $("searchResults");
-  box.innerHTML = '<p class="note">Analyse…</p>';
-  $("smartBtn").disabled = true;
+  box.innerHTML = '<p class="note">⏳ Analyse en cours…</p>';
+  $("smartBtn").disabled = true; $("smartBtn").textContent = "Analyse…";
   try{
     const items = splitItems(q);
     const resolved = await Promise.all(items.map(resolveItem));
@@ -548,8 +559,8 @@ async function smartAdd(){
       const aiNames = new Set(aiItems.map(i=>i.name));
       if(missed.length && !aiItems.length) box.insertAdjacentHTML("beforeend", `<p class="note" style="color:var(--warn)">Non trouvé : ${esc(missed.join(", "))}</p>`);
     }
-  }catch(e){ box.innerHTML = '<p class="note" style="color:var(--red)">Erreur réseau. Réessaie.</p>'; }
-  $("smartBtn").disabled = false;
+  }catch(e){ box.innerHTML = '<p class="note" style="color:var(--red)">Erreur ou délai réseau dépassé. Réessaie.</p>'; }
+  $("smartBtn").disabled = false; $("smartBtn").textContent = "Ajouter au journal";
 }
 
 // ── PHOTO IA (Gemini via edge function) ──
@@ -568,11 +579,11 @@ $("photoInput").addEventListener("change", async e => {
 
 async function callAi(payload){
   const { data:{ session } } = await sb.auth.getSession();
-  const r = await fetch(`${SUPABASE_URL}/functions/v1/analyze-meal`, {
+  const r = await fetchT(`${SUPABASE_URL}/functions/v1/analyze-meal`, {
     method:"POST",
     headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+((session&&session.access_token)||SUPABASE_ANON), "apikey":SUPABASE_ANON },
     body: JSON.stringify(payload)
-  });
+  }, 25000);
   const d = await r.json().catch(()=>({}));
   if(!r.ok || d.error) throw new Error(String(d.error||("HTTP "+r.status)));
   return d.items||[];
@@ -722,7 +733,7 @@ async function resolveItem(qRaw){
   }
   try{
     const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(qty.clean||qRaw)}&json=1&page_size=3&fields=product_name,brands,nutriments,serving_size,serving_quantity`;
-    const d = await (await fetch(url,{headers:{"User-Agent":"CutTracker/1.0"}})).json();
+    const d = await (await fetchT(url,{headers:{"User-Agent":"CutTracker/1.0"}}, 8000)).json();
     const p0 = (d.products||[]).find(p=>p.nutriments && p.nutriments["energy-kcal_100g"]);
     if(!p0) return null;
     const n = p0.nutriments;
@@ -777,7 +788,7 @@ async function doSearch(fromQueue){
   const box = $("searchResults"); box.innerHTML = `<p class="note">Recherche…</p>`;
   try{
     const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(qty.clean||q)}&json=1&page_size=8&fields=product_name,brands,nutriments,serving_size,serving_quantity`;
-    const r = await fetch(url, { headers:{ "User-Agent":"CutTracker/1.0" }});
+    const r = await fetchT(url, { headers:{ "User-Agent":"CutTracker/1.0" }}, 8000);
     const d = await r.json();
     const prods = (d.products||[]).filter(p=>p.nutriments && p.nutriments["energy-kcal_100g"]);
     if(!prods.length){
