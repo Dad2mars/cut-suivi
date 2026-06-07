@@ -255,7 +255,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v21", APP_BUILD = "07/06/2026 · fusion";
+const APP_VERSION = "v22", APP_BUILD = "07/06/2026 · hors-ligne";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -470,6 +470,7 @@ function renderKcalChart(days){
 async function init(){
   renderDayTitle();
   loadHistory();
+  flushQueue();
   renderHabits();
   $("gKcal").value = KCAL_T; $("gProt").value = PROT_T;
   await loadEntries();
@@ -477,8 +478,10 @@ async function init(){
 }
 
 async function loadEntries(){
-  const { data } = await sb.from("food_entries").select("*").eq("day", viewDay).order("created_at");
+  let data = null;
+  try{ const r = await sb.from("food_entries").select("*").eq("day", viewDay).order("created_at"); data = r.data; }catch(_){}
   entries = data || [];
+  getQueue().filter(e=>e.day===viewDay).forEach(e=>{ e.created_at = e.created_at || new Date().toISOString(); entries.push(e); });
   renderEntries();
 }
 async function loadWeights(){
@@ -488,14 +491,43 @@ async function loadWeights(){
 }
 
 // ── REPAS ─────────────────────────────────────────────
+function getQueue(){ try{ return JSON.parse(localStorage.getItem("pendingAdds")||"[]"); }catch(_){ return []; } }
+function setQueue(q){ localStorage.setItem("pendingAdds", JSON.stringify(q)); }
+async function flushQueue(){
+  const q = getQueue(); if(!q.length) return;
+  const rest = [];
+  for(const it of q){
+    const { id, pending, ...row } = it;
+    try{ const { error } = await sb.from("food_entries").insert(row); if(error) rest.push(it); }
+    catch(_){ rest.push(it); }
+  }
+  setQueue(rest);
+  if(rest.length < q.length){ toast("✅ "+(q.length-rest.length)+" repas synchronisé(s)"); await loadEntries(); }
+}
+window.addEventListener("online", ()=>{ flushQueue(); });
+
 async function addEntry(label, kcal, prot, carbs, fat){
   const row = { day: viewDay, label, kcal: Math.round(kcal), prot: Math.round(prot), carbs: Math.round(carbs), fat: Math.round(fat) };
-  const { data, error } = await sb.from("food_entries").insert(row).select();
-  if(error){ toast("⚠ Ajout échoué (réseau ?) — réessaie"); return false; }
-  if(data){ entries.push(data[0]); renderEntries(); bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat); }
-  return true;
+  try{
+    const { data, error } = await sb.from("food_entries").insert(row).select();
+    if(error) throw error;
+    if(data){ entries.push(data[0]); renderEntries(); bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat); }
+    return true;
+  }catch(e){
+    // Hors-ligne ou serveur injoignable → file d'attente locale
+    const tmp = { ...row, id: "tmp-"+Date.now()+"-"+Math.floor(Math.random()*1e6), pending: true };
+    const q = getQueue(); q.push(tmp); setQueue(q);
+    if(tmp.day === viewDay){ entries.push(tmp); renderEntries(); }
+    bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat);
+    toast("📴 Hors-ligne — repas gardé, synchro auto au retour du réseau");
+    return true;
+  }
 }
 async function delEntry(id){
+  if(String(id).startsWith("tmp-")){
+    setQueue(getQueue().filter(e => e.id !== id));
+    entries = entries.filter(e => e.id !== id); renderEntries(); return;
+  }
   await sb.from("food_entries").delete().eq("id", id);
   entries = entries.filter(e => e.id !== id); renderEntries();
 }
@@ -526,7 +558,7 @@ function renderEntries(){
     group.forEach(e=>{
       const d = document.createElement("div"); d.className="entry";
       d.innerHTML = `<div class="row" style="align-items:flex-start">
-          <span style="font-size:14px;font-weight:600;flex:1">${esc(e.label)}</span>
+          <span style="font-size:14px;font-weight:600;flex:1">${e.pending?"⏳ ":""}${esc(e.label)}</span>
           <button class="x" data-del="${e.id}">×</button></div>
         <div class="mono dim" style="display:flex;gap:14px;margin-top:8px;font-size:12px;flex-wrap:wrap">
           <span><b style="color:var(--accent)">${e.kcal} kcal</b></span>
