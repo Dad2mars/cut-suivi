@@ -66,14 +66,7 @@
       <input id="pwd" type="password" placeholder="Mot de passe" autocomplete="current-password" style="margin-top:8px"/>
       <button id="pwdBtn" class="btn" style="margin-top:10px">Se connecter</button>
       <p class="note" style="margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)">Pas encore de mot de passe ou oublié ? Connexion par email :</p>
-      <button id="loginBtn" class="chip" style="margin-top:8px;width:100%">Recevoir le code par email</button>
-      <div id="otpZone" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
-        <p class="note" style="margin:0 0 8px">Entre le <b>code à 6 chiffres</b> reçu par email :</p>
-        <div style="display:flex;gap:8px">
-          <input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="flex:1;font-family:var(--mono);font-size:22px;letter-spacing:6px;text-align:center"/>
-          <button id="otpBtn" class="btn" style="width:auto;padding:0 18px">OK</button>
-        </div>
-      </div>
+      <button id="loginBtn" class="chip" style="margin-top:8px;width:100%">Recevoir le lien par email</button>
       <div id="pasteLinkZone" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <p class="note" style="margin:0 0 8px"><b>Depuis l'app installée :</b> n'ouvre pas le lien de l'email. Reste appuyé dessus → <b>Copier le lien</b>, puis colle-le ici :</p>
         <input id="magicPaste" type="url" placeholder="Colle le lien ici" autocomplete="off"/>
@@ -92,7 +85,7 @@
   <!-- ÉCRAN AUJOURD'HUI -->
   <div id="screen-today">
     <div class="row" style="align-items:center">
-      <div class="eyebrow">Cut · objectif 70kg / 15% MG</div>
+      <div class="eyebrow">Cut · objectif 70kg / 15% MG <span id="streakBadge" style="color:var(--warn);font-weight:700"></span></div>
       <button id="gotoSettings" class="x" title="Réglages" style="font-size:20px">⚙︎</button>
     </div>
     <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
@@ -149,6 +142,10 @@
       <p class="note" style="margin-bottom:0">Vert = dans l'objectif · Orange = dépassement · Ligne pointillée = ton objectif</p>
     </div>
     <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">📋 Bilan des 7 derniers jours</div>
+      <div id="weekReview" class="note" style="font-size:13px;line-height:1.6"></div>
+    </div>
+    <div class="card">
       <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px">Pesée du matin à jeun</div>
       <div style="display:flex;gap:10px;margin-bottom:18px">
         <input id="wInput" inputmode="decimal" placeholder="74.0" />
@@ -194,6 +191,11 @@
       </div>
       <p id="pwdMsg" class="note" style="margin-bottom:0"></p>
     </div>
+    <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">💾 Tes données</div>
+      <button id="exportBtn" class="chip" style="width:100%;padding:12px">Exporter tout en CSV (repas + poids)</button>
+      <p class="note" style="margin-bottom:0">Sauvegarde complète, lisible dans Excel/Numbers.</p>
+    </div>
     <button id="logout" class="chip" style="width:100%;padding:12px;color:var(--red);border-color:var(--red)">Se déconnecter</button>
     <p class="note" id="verApp" style="text-align:center;margin-top:16px"></p>
   </div>
@@ -205,7 +207,6 @@
       <div style="display:flex;gap:8px">
         <input id="foodQuery" placeholder="ex : 3 œufs et 150g de riz…" style="flex:1"/>
         <button id="micBtn" class="chip hidden" style="padding:0 14px;font-size:18px" title="Dicter">🎤</button>
-        <button id="scanBtn" class="chip" style="padding:0 14px" title="Scanner un code-barres"><svg width="20" height="16" viewBox="0 0 20 16" style="display:block"><g fill="currentColor"><rect x="0" width="2" height="16"/><rect x="4" width="1" height="16"/><rect x="7" width="2" height="16"/><rect x="11" width="1" height="16"/><rect x="14" width="1" height="16"/><rect x="17" width="3" height="16"/></g></svg></button>
         <button id="photoBtn" class="chip" style="padding:0 14px;font-size:18px" title="Photo du repas">📷</button>
         <input id="photoInput" type="file" accept="image/*" capture="environment" class="hidden"/>
       </div>
@@ -214,7 +215,8 @@
       <div id="searchResults"></div>
       <p class="note hidden" id="habitTitle" style="margin:14px 0 6px;font-weight:600">Tes habituels</p>
       <div id="habitChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-      <button id="manualToggle" class="chip" style="margin-top:14px;width:100%">Saisie manuelle (kcal et macros connus)</button>
+      <button id="yesterdayBtn" class="chip" style="margin-top:14px;width:100%">↩ Reprendre un repas d'hier</button>
+      <button id="manualToggle" class="chip" style="margin-top:8px;width:100%">Saisie manuelle (kcal et macros connus)</button>
       <div id="manualZone" class="hidden" style="margin-top:10px">
         <input id="mLabel" placeholder="Nom de l'aliment" />
         <div style="display:flex;gap:8px;margin-top:8px">
@@ -245,7 +247,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v20", APP_BUILD = "07/06/2026";
+const APP_VERSION = "v20", APP_BUILD = "05/06/2026 08:30";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -282,7 +284,7 @@ function showAuth(){
   // App installée (écran d'accueil) : instructions adaptées + zone de collage visible
   if(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches){
     const note = document.querySelector("#step-email .note");
-    if(note) note.innerHTML = "Entre ton email puis <b>Recevoir le code</b>, et tape le <b>code à 6 chiffres</b> reçu par email. Si l'email contient un lien au lieu d'un code : reste appuyé dessus → <b>Copier le lien</b> → colle-le ci-dessous. À faire <b>une seule fois</b> : l'app retient ta session ensuite.";
+    if(note) note.innerHTML = "Entre ton email puis <b>Recevoir le lien</b>. Dans l'email reçu : <b>ne clique pas le lien</b> — reste appuyé dessus → <b>Copier le lien</b> → reviens ici et <b>colle-le ci-dessous</b>. À faire <b>une seule fois</b> : l'app retient ta session ensuite.";
     $("pasteLinkZone").classList.remove("hidden");
   }
 }
@@ -295,7 +297,7 @@ $("pwdBtn").onclick = async () => {
   localStorage.setItem("lastEmail", email);
   const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
   $("pwdBtn").disabled = false;
-  if(error){ $("authMsg").textContent = "⚠ Email ou mot de passe incorrect. (Pas encore de mot de passe ? Utilise « Recevoir le code par email » puis définis-le dans l'app.)"; }
+  if(error){ $("authMsg").textContent = "⚠ Email ou mot de passe incorrect. (Pas encore de mot de passe ? Utilise « Recevoir le lien par email » puis définis-le dans l'app.)"; }
   // succès → onAuthStateChange affiche l'app
 };
 $("pwd").addEventListener("keydown", e => { if(e.key === "Enter") $("pwdBtn").click(); });
@@ -309,24 +311,15 @@ $("loginBtn").onclick = async () => {
   const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   $("loginBtn").disabled = false;
   if(error){ $("authMsg").textContent = "Erreur : " + error.message; return; }
-  $("otpZone").classList.remove("hidden");
-  $("pasteLinkZone").classList.remove("hidden"); // secours si l'email contient un lien
-  $("authMsg").textContent = "Email envoyé ✓ Tape le code à 6 chiffres reçu (ou utilise le lien de l'email en secours).";
-  setTimeout(()=>{ try{ $("otpCode").focus(); }catch(_){} }, 80);
+  const standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  if(standalone){
+    $("authMsg").textContent = "Email envoyé ✓ NE clique PAS le lien : copie-le et colle-le ci-dessous.";
+    $("pasteLinkZone").classList.remove("hidden");
+  } else {
+    $("authMsg").textContent = "Lien envoyé ✓ Ouvre l'email sur cet appareil et clique sur le lien. (Tu peux renvoyer dans 60s si besoin.)";
+    $("pasteLinkZone").classList.remove("hidden"); // dispo aussi en secours
+  }
 };
-
-// Connexion par code à 6 chiffres (OTP)
-$("otpBtn").onclick = async () => {
-  const email = $("email").value.trim(), code = $("otpCode").value.trim().replace(/\D/g,"");
-  if(!email){ $("authMsg").textContent = "Entre ton email ci-dessus."; return; }
-  if(code.length < 6){ $("authMsg").textContent = "Le code fait 6 chiffres."; return; }
-  $("otpBtn").disabled = true; $("authMsg").textContent = "Vérification…";
-  const { error } = await sb.auth.verifyOtp({ email, token: code, type: "email" });
-  $("otpBtn").disabled = false;
-  if(error){ $("authMsg").textContent = "⚠ Code invalide ou expiré. Redemande un code et utilise le DERNIER email reçu."; }
-  // succès → onAuthStateChange affiche l'app
-};
-$("otpCode").addEventListener("keydown", e => { if(e.key === "Enter") $("otpBtn").click(); });
 
 $("magicPasteBtn").onclick = async () => {
   $("authMsg").textContent = "Vérification…";
@@ -357,6 +350,25 @@ if(sb){
 
 $("logout").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 
+$("exportBtn").onclick = async () => {
+  $("exportBtn").disabled = true; $("exportBtn").textContent = "Préparation…";
+  try{
+    const [f, w] = await Promise.all([
+      sb.from("food_entries").select("*").order("day"),
+      sb.from("weights").select("*").order("day"),
+    ]);
+    let csv = "type;jour;libelle;kcal;proteines_g;glucides_g;lipides_g;poids_kg\n";
+    (f.data||[]).forEach(e=>{ csv += `repas;${e.day};"${(e.label||"").replace(/"/g,'""')}";${e.kcal};${e.prot};${e.carbs};${e.fat};\n`; });
+    (w.data||[]).forEach(e=>{ csv += `poids;${e.day};;;;;;${e.kg}\n`; });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"}));
+    a.download = "cut-suivi-export.csv";
+    a.click();
+    toast("✅ Export téléchargé");
+  }catch(e){ toast("⚠ Export échoué — réessaie"); }
+  $("exportBtn").disabled = false; $("exportBtn").textContent = "Exporter tout en CSV (repas + poids)";
+};
+
 $("setPwdBtn").onclick = async () => {
   const p = $("newPwd").value;
   if(p.length < 6){ $("pwdMsg").textContent = "⚠ 6 caractères minimum."; return; }
@@ -386,13 +398,42 @@ $("nextDay").onclick = ()=>changeDay(1);
 $("todayChip").onclick = async ()=>{ viewDay = today(); renderDayTitle(); await loadEntries(); };
 
 async function loadHistory(){
-  const since = new Date(Date.now()-13*864e5).toISOString().slice(0,10);
-  const { data } = await sb.from("food_entries").select("day,kcal").gte("day", since);
-  const agg = {};
-  (data||[]).forEach(r=>{ agg[r.day]=(agg[r.day]||0)+r.kcal; });
+  const since = new Date(Date.now()-59*864e5).toISOString().slice(0,10);
+  const { data } = await sb.from("food_entries").select("day,kcal,prot").gte("day", since);
+  const agg = {}, aggP = {};
+  (data||[]).forEach(r=>{ agg[r.day]=(agg[r.day]||0)+r.kcal; aggP[r.day]=(aggP[r.day]||0)+(r.prot||0); });
   const days=[];
   for(let i=13;i>=0;i--){ const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10); days.push({d, k: agg[d]||0}); }
   renderKcalChart(days);
+  // Streak : jours consécutifs loggés (aujourd'hui compte s'il est loggé)
+  let streak = 0;
+  for(let i=0;i<60;i++){
+    const d = new Date(Date.now()-i*864e5).toISOString().slice(0,10);
+    if(agg[d]) streak++;
+    else if(i===0) continue;
+    else break;
+  }
+  const sb_ = $("streakBadge");
+  if(sb_){ sb_.textContent = streak>=2 ? "🔥 "+streak+" j" : ""; }
+  // Bilan 7 derniers jours
+  let totK=0, totP=0, n=0;
+  for(let i=0;i<7;i++){
+    const d = new Date(Date.now()-i*864e5).toISOString().slice(0,10);
+    if(agg[d]){ totK+=agg[d]; totP+=aggP[d]||0; n++; }
+  }
+  const w = $("weekReview");
+  if(w){
+    if(!n){ w.textContent = "Pas encore de données cette semaine."; }
+    else {
+      const avgK = Math.round(totK/n), avgP = Math.round(totP/n);
+      let verdict;
+      if(avgK > KCAL_T+150) verdict = "⚠ Au-dessus de l'objectif — resserre les portions du soir.";
+      else if(avgK < KCAL_T-400) verdict = "⚠ Très en dessous — ne descends pas trop vite (muscle + tendon).";
+      else verdict = "✅ Dans la cible. Continue comme ça.";
+      if(avgP < PROT_T-25) verdict += " Protéines un peu basses (" + avgP + " g/j en moyenne).";
+      w.innerHTML = `<b>${n} j loggés</b> · moyenne <b>${avgK} kcal</b> et <b>${avgP} g prot</b>/jour<br>${verdict}`;
+    }
+  }
 }
 function renderKcalChart(days){
   const svg = $("kcalChart"); if(!svg) return;
@@ -457,17 +498,27 @@ function renderEntries(){
   $("carbNow").textContent = tot.carbs+"g"; $("fatNow").textContent = tot.fat+"g";
   renderCoach(tot);
   const c = $("entries"); c.innerHTML = "";
-  entries.forEach(e=>{
-    const d = document.createElement("div"); d.className="entry";
-    d.innerHTML = `<div class="row" style="align-items:flex-start">
-        <span style="font-size:14px;font-weight:600;flex:1">${esc(e.label)}</span>
-        <button class="x" data-del="${e.id}">×</button></div>
-      <div class="mono dim" style="display:flex;gap:14px;margin-top:8px;font-size:12px;flex-wrap:wrap">
-        <span><b style="color:var(--accent)">${e.kcal} kcal</b></span>
-        <span>P<b style="color:var(--good)"> ${e.prot}g</b></span>
-        <span>G<b style="color:var(--txt)"> ${e.carbs}g</b></span>
-        <span>L<b style="color:var(--txt)"> ${e.fat}g</b></span></div>`;
-    c.appendChild(d);
+  const MEALS = [["🌅 Matin",0,11],["☀️ Midi",11,15],["🍎 Collation",15,18],["🌙 Soir",18,24]];
+  MEALS.forEach(([name,h1,h2])=>{
+    const group = entries.filter(e=>{ const h = new Date(e.created_at).getHours(); return h>=h1 && h<h2; });
+    if(!group.length) return;
+    const sub = group.reduce((t,e)=>t+e.kcal,0);
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;justify-content:space-between;align-items:baseline;margin:14px 4px 6px";
+    head.innerHTML = `<span style="font-size:13px;font-weight:700">${name}</span><span class="mono dim" style="font-size:12px">${sub} kcal</span>`;
+    c.appendChild(head);
+    group.forEach(e=>{
+      const d = document.createElement("div"); d.className="entry";
+      d.innerHTML = `<div class="row" style="align-items:flex-start">
+          <span style="font-size:14px;font-weight:600;flex:1">${esc(e.label)}</span>
+          <button class="x" data-del="${e.id}">×</button></div>
+        <div class="mono dim" style="display:flex;gap:14px;margin-top:8px;font-size:12px;flex-wrap:wrap">
+          <span><b style="color:var(--accent)">${e.kcal} kcal</b></span>
+          <span>P<b style="color:var(--good)"> ${e.prot}g</b></span>
+          <span>G<b style="color:var(--txt)"> ${e.carbs}g</b></span>
+          <span>L<b style="color:var(--txt)"> ${e.fat}g</b></span></div>`;
+      c.appendChild(d);
+    });
   });
   c.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>delEntry(b.dataset.del));
 }
@@ -489,6 +540,14 @@ $("fabAdd").onclick = openSheet;
 $("sheetClose").onclick = closeSheet;
 $("sheetOverlay").addEventListener("click", e=>{ if(e.target===$("sheetOverlay")) closeSheet(); });
 $("manualToggle").onclick = ()=>$("manualZone").classList.toggle("hidden");
+$("yesterdayBtn").onclick = async ()=>{
+  const box = $("searchResults");
+  box.innerHTML = '<p class="note">Chargement d\'hier…</p>';
+  const yd = new Date(new Date(viewDay+"T12:00:00").getTime()-864e5).toISOString().slice(0,10);
+  const { data } = await sb.from("food_entries").select("*").eq("day", yd).order("created_at");
+  if(!data || !data.length){ box.innerHTML = '<p class="note">Rien de loggé la veille.</p>'; return; }
+  renderAiItems(data.map(e=>({ name: e.label.replace(/\s*\(.*$/,""), grams: (e.label.match(/\((\d+)g/)||[])[1]||100, kcal: e.kcal, prot: e.prot, carb: e.carbs, fat: e.fat })), "↩");
+};
 $("coachLine").onclick = ()=>{ $("coachDetail").classList.toggle("hidden"); $("coachChev").textContent = $("coachDetail").classList.contains("hidden")?"▾":"▴"; };
 $("saveGoals").onclick = ()=>{
   const k = +$("gKcal").value||1950, p = +$("gProt").value||150;
@@ -593,72 +652,6 @@ $("photoInput").addEventListener("change", async e => {
     renderAiItems(items, "📷");
   }catch(err){ box.innerHTML = '<p class="note" style="color:var(--red)">Erreur réseau pendant l\'analyse. Réessaie.</p>'; }
 });
-
-// ── SCAN CODE-BARRES ──
-let scanStream = null, scanStop = false;
-function stopScan(){
-  scanStop = true;
-  if(scanStream){ try{ scanStream.getTracks().forEach(t=>t.stop()); }catch(_){} scanStream = null; }
-  const ov = document.getElementById("scanOverlay"); if(ov) ov.remove();
-}
-$("scanBtn").onclick = async () => {
-  const box = $("searchResults");
-  const ov = document.createElement("div");
-  ov.id = "scanOverlay";
-  ov.style.cssText = "position:fixed;inset:0;background:#000;z-index:100;display:flex;flex-direction:column;align-items:center";
-  ov.innerHTML = `<video id="scanVideo" autoplay playsinline muted style="width:100%;max-width:460px;flex:1;object-fit:cover;min-height:0"></video>
-    <div style="position:absolute;top:38%;left:10%;right:10%;height:90px;border:2px solid var(--accent);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.25)"></div>
-    <p style="color:#fff;font-size:13px;margin:12px">Vise le code-barres du produit</p>
-    <button id="scanCancel" class="chip" style="color:#fff;border-color:#fff;margin-bottom:max(24px,env(safe-area-inset-bottom));padding:10px 28px">Annuler</button>`;
-  document.body.appendChild(ov);
-  document.getElementById("scanCancel").onclick = stopScan;
-  scanStop = false;
-  let code = null;
-  try{
-    scanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:false });
-    const video = document.getElementById("scanVideo");
-    video.srcObject = scanStream; await video.play();
-    const deadline = Date.now() + 30000;
-    if("BarcodeDetector" in window){
-      const det = new BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128"] });
-      while(!scanStop && !code && Date.now() < deadline){
-        try{ const f = await det.detect(video); if(f.length) code = f[0].rawValue; }catch(_){}
-        if(!code) await new Promise(r=>setTimeout(r, 250));
-      }
-    } else {
-      const { BrowserMultiFormatReader } = await import("https://esm.sh/@zxing/browser@0.1.5");
-      const reader = new BrowserMultiFormatReader();
-      code = await new Promise(res => {
-        let done = false;
-        const finish = (v, controls) => { if(done) return; done = true; try{ controls && controls.stop(); }catch(_){} res(v); };
-        reader.decodeFromVideoElement(video, (result, err, controls) => {
-          if(result) finish(result.getText(), controls);
-          else if(scanStop || Date.now() > deadline) finish(null, controls);
-        }).catch(()=>finish(null));
-      });
-    }
-  }catch(err){
-    stopScan();
-    toast("⚠ Caméra indisponible ou accès refusé");
-    return;
-  }
-  stopScan();
-  if(!code){ toast("Aucun code-barres détecté"); return; }
-  box.innerHTML = `<p class="note">🛒 Code ${esc(code)} — recherche du produit…</p>`;
-  try{
-    const r = await fetchT(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,nutriments,serving_size,serving_quantity`, { headers:{ "User-Agent":"CutTracker/1.0" } }, 9000);
-    const d = await r.json();
-    const p0 = d && d.product;
-    if(!p0 || !p0.nutriments || p0.nutriments["energy-kcal_100g"] == null){
-      box.innerHTML = '<p class="note" style="color:var(--warn)">Produit inconnu de la base OpenFoodFacts. Utilise la recherche ou la saisie manuelle.</p>';
-      return;
-    }
-    const name = (p0.product_name || ("Produit " + code)) + (p0.brands ? (" · " + p0.brands.split(",")[0]) : "");
-    selectProduct(name, p0.nutriments, null, parseFloat(p0.serving_quantity) || null);
-  }catch(e){
-    box.innerHTML = '<p class="note" style="color:var(--red)">Erreur réseau pendant la recherche du produit. Réessaie.</p>';
-  }
-};
 
 async function callAi(payload){
   const { data:{ session } } = await sb.auth.getSession();
