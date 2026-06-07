@@ -255,7 +255,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v22", APP_BUILD = "07/06/2026 · hors-ligne";
+const APP_VERSION = "v22.1", APP_BUILD = "07/06/2026 · hors-ligne fix";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -515,7 +515,7 @@ async function addEntry(label, kcal, prot, carbs, fat){
     return true;
   }catch(e){
     // Hors-ligne ou serveur injoignable → file d'attente locale
-    const tmp = { ...row, id: "tmp-"+Date.now()+"-"+Math.floor(Math.random()*1e6), pending: true };
+    const tmp = { ...row, id: "tmp-"+Date.now()+"-"+Math.floor(Math.random()*1e6), pending: true, created_at: new Date().toISOString() };
     const q = getQueue(); q.push(tmp); setQueue(q);
     if(tmp.day === viewDay){ entries.push(tmp); renderEntries(); }
     bumpHabit(label, row.kcal, row.prot, row.carbs, row.fat);
