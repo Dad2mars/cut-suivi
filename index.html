@@ -199,6 +199,12 @@
       <p id="pwdMsg" class="note" style="margin-bottom:0"></p>
     </div>
     <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🔔 Rappels</div>
+      <p class="note" style="margin-top:0">Pesée à 8h · repas oublié à 14h · budget restant à 19h. Sur iPhone : à activer depuis l'app installée sur l'écran d'accueil (iOS 16.4+).</p>
+      <button id="pushBtn" class="btn">Activer les rappels sur cet appareil</button>
+      <p id="pushMsg" class="note" style="margin-bottom:0"></p>
+    </div>
+    <div class="card">
       <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">💾 Tes données</div>
       <button id="exportBtn" class="chip" style="width:100%;padding:12px">Exporter tout en CSV (repas + poids)</button>
       <p class="note" style="margin-bottom:0">Sauvegarde complète, lisible dans Excel/Numbers.</p>
@@ -255,7 +261,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v22.1", APP_BUILD = "07/06/2026 · hors-ligne fix";
+const APP_VERSION = "v23", APP_BUILD = "07/06/2026 · rappels";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -365,6 +371,26 @@ if(sb){
 } else { showAuth(); }
 
 $("logout").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+function b64ToU8(b){ const p = "=".repeat((4 - b.length % 4) % 4); const r = atob((b + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); }
+$("pushBtn").onclick = async () => {
+  $("pushMsg").textContent = "Activation…";
+  try{
+    if(!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)){
+      $("pushMsg").textContent = "⚠ Non supporté dans ce navigateur. Sur iPhone : installe l'app sur l'écran d'accueil puis active depuis l'app installée."; return;
+    }
+    const perm = await Notification.requestPermission();
+    if(perm !== "granted"){ $("pushMsg").textContent = "⚠ Permission refusée. Autorise les notifications dans les réglages."; return; }
+    const reg = await navigator.serviceWorker.ready;
+    const { publicKey } = await (await fetchT(SUPABASE_URL + "/functions/v1/send-reminders", {}, 9000)).json();
+    const subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(publicKey) });
+    const { data: { user } } = await sb.auth.getUser();
+    const { error } = await sb.from("push_subs").upsert({ user_id: user.id, sub: subscription.toJSON(), goal_kcal: KCAL_T });
+    if(error) throw error;
+    $("pushMsg").textContent = "✅ Rappels activés : pesée 8h · repas 14h · dîner 19h";
+    toast("🔔 Rappels activés");
+  }catch(e){ $("pushMsg").textContent = "⚠ Échec : " + (e.message || e); }
+};
 
 $("exportBtn").onclick = async () => {
   $("exportBtn").disabled = true; $("exportBtn").textContent = "Préparation…";

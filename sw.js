@@ -1,4 +1,4 @@
-const CACHE = "cut-v22";
+const CACHE = "cut-v23";
 const SHELL = ["./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -28,4 +28,17 @@ self.addEventListener("fetch", e => {
       return fetch(e.request);
     }
   })());
+});
+
+self.addEventListener("push", e => {
+  let d = {};
+  try{ d = e.data.json(); }catch(_){ d = { title: "Cut · Suivi", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Cut · Suivi", { body: d.body || "", icon: "icon-192.png", badge: "icon-192.png" }));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+    for(const c of list){ if(c.url.includes("cut-suivi") && "focus" in c) return c.focus(); }
+    return clients.openWindow("./");
+  }));
 });
