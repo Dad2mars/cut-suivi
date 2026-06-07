@@ -66,7 +66,14 @@
       <input id="pwd" type="password" placeholder="Mot de passe" autocomplete="current-password" style="margin-top:8px"/>
       <button id="pwdBtn" class="btn" style="margin-top:10px">Se connecter</button>
       <p class="note" style="margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)">Pas encore de mot de passe ou oublié ? Connexion par email :</p>
-      <button id="loginBtn" class="chip" style="margin-top:8px;width:100%">Recevoir le lien par email</button>
+      <button id="loginBtn" class="chip" style="margin-top:8px;width:100%">Recevoir le code par email</button>
+      <div id="otpZone" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <p class="note" style="margin:0 0 8px">Entre le <b>code à 6 chiffres</b> reçu par email :</p>
+        <div style="display:flex;gap:8px">
+          <input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="flex:1;font-family:var(--mono);font-size:22px;letter-spacing:6px;text-align:center"/>
+          <button id="otpBtn" class="btn" style="width:auto;padding:0 18px">OK</button>
+        </div>
+      </div>
       <div id="pasteLinkZone" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <p class="note" style="margin:0 0 8px"><b>Depuis l'app installée :</b> n'ouvre pas le lien de l'email. Reste appuyé dessus → <b>Copier le lien</b>, puis colle-le ici :</p>
         <input id="magicPaste" type="url" placeholder="Colle le lien ici" autocomplete="off"/>
@@ -208,6 +215,7 @@
         <input id="foodQuery" placeholder="ex : 3 œufs et 150g de riz…" style="flex:1"/>
         <button id="micBtn" class="chip hidden" style="padding:0 14px;font-size:18px" title="Dicter">🎤</button>
         <button id="photoBtn" class="chip" style="padding:0 14px;font-size:18px" title="Photo du repas">📷</button>
+        <button id="scanBtn" class="chip" style="padding:0 14px" title="Scanner un code-barres"><svg width="20" height="16" viewBox="0 0 20 16" style="display:block"><g fill="currentColor"><rect x="0" width="2" height="16"/><rect x="4" width="1" height="16"/><rect x="7" width="2" height="16"/><rect x="11" width="1" height="16"/><rect x="14" width="1" height="16"/><rect x="17" width="3" height="16"/></g></svg></button>
         <input id="photoInput" type="file" accept="image/*" capture="environment" class="hidden"/>
       </div>
       <button id="smartBtn" class="btn" style="margin-top:10px">Ajouter au journal</button>
@@ -247,7 +255,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v20", APP_BUILD = "05/06/2026 08:30";
+const APP_VERSION = "v21", APP_BUILD = "07/06/2026 · fusion";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -297,7 +305,7 @@ $("pwdBtn").onclick = async () => {
   localStorage.setItem("lastEmail", email);
   const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
   $("pwdBtn").disabled = false;
-  if(error){ $("authMsg").textContent = "⚠ Email ou mot de passe incorrect. (Pas encore de mot de passe ? Utilise « Recevoir le lien par email » puis définis-le dans l'app.)"; }
+  if(error){ $("authMsg").textContent = "⚠ Email ou mot de passe incorrect. (Pas encore de mot de passe ? Utilise « Recevoir le code par email » puis définis-le dans l'app.)"; }
   // succès → onAuthStateChange affiche l'app
 };
 $("pwd").addEventListener("keydown", e => { if(e.key === "Enter") $("pwdBtn").click(); });
@@ -311,15 +319,23 @@ $("loginBtn").onclick = async () => {
   const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   $("loginBtn").disabled = false;
   if(error){ $("authMsg").textContent = "Erreur : " + error.message; return; }
-  const standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
-  if(standalone){
-    $("authMsg").textContent = "Email envoyé ✓ NE clique PAS le lien : copie-le et colle-le ci-dessous.";
-    $("pasteLinkZone").classList.remove("hidden");
-  } else {
-    $("authMsg").textContent = "Lien envoyé ✓ Ouvre l'email sur cet appareil et clique sur le lien. (Tu peux renvoyer dans 60s si besoin.)";
-    $("pasteLinkZone").classList.remove("hidden"); // dispo aussi en secours
-  }
+  $("otpZone").classList.remove("hidden");
+  $("pasteLinkZone").classList.remove("hidden");
+  $("authMsg").textContent = "Email envoyé ✓ Tape le code à 6 chiffres reçu (ou utilise le lien de l'email en secours).";
+  setTimeout(()=>{ try{ $("otpCode").focus(); }catch(_){} }, 80);
 };
+
+// Connexion par code à 6 chiffres (OTP)
+$("otpBtn").onclick = async () => {
+  const email = $("email").value.trim(), code = $("otpCode").value.trim().replace(/\D/g,"");
+  if(!email){ $("authMsg").textContent = "Entre ton email ci-dessus."; return; }
+  if(code.length < 6){ $("authMsg").textContent = "Le code fait 6 chiffres."; return; }
+  $("otpBtn").disabled = true; $("authMsg").textContent = "Vérification…";
+  const { error } = await sb.auth.verifyOtp({ email, token: code, type: "email" });
+  $("otpBtn").disabled = false;
+  if(error){ $("authMsg").textContent = "⚠ Code invalide ou expiré. Redemande un code et utilise le DERNIER email reçu."; }
+};
+$("otpCode").addEventListener("keydown", e => { if(e.key === "Enter") $("otpBtn").click(); });
 
 $("magicPasteBtn").onclick = async () => {
   $("authMsg").textContent = "Vérification…";
@@ -1009,6 +1025,73 @@ function renderWeights(){
       : "Stagnation/hausse. Si 2 sem. ainsi, retire ~150 kcal — sauf si douleur tendineuse : alors on garde.";
   } else M.classList.add("hidden");
 }
+
+
+// ── SCAN CODE-BARRES ──
+let scanStream = null, scanStop = false;
+function stopScan(){
+  scanStop = true;
+  if(scanStream){ try{ scanStream.getTracks().forEach(t=>t.stop()); }catch(_){} scanStream = null; }
+  const ov = document.getElementById("scanOverlay"); if(ov) ov.remove();
+}
+$("scanBtn").onclick = async () => {
+  const box = $("searchResults");
+  const ov = document.createElement("div");
+  ov.id = "scanOverlay";
+  ov.style.cssText = "position:fixed;inset:0;background:#000;z-index:100;display:flex;flex-direction:column;align-items:center";
+  ov.innerHTML = `<video id="scanVideo" autoplay playsinline muted style="width:100%;max-width:460px;flex:1;object-fit:cover;min-height:0"></video>
+    <div style="position:absolute;top:38%;left:10%;right:10%;height:90px;border:2px solid var(--accent);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.25)"></div>
+    <p style="color:#fff;font-size:13px;margin:12px">Vise le code-barres du produit</p>
+    <button id="scanCancel" class="chip" style="color:#fff;border-color:#fff;margin-bottom:max(24px,env(safe-area-inset-bottom));padding:10px 28px">Annuler</button>`;
+  document.body.appendChild(ov);
+  document.getElementById("scanCancel").onclick = stopScan;
+  scanStop = false;
+  let code = null;
+  try{
+    scanStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:false });
+    const video = document.getElementById("scanVideo");
+    video.srcObject = scanStream; await video.play();
+    const deadline = Date.now() + 30000;
+    if("BarcodeDetector" in window){
+      const det = new BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128"] });
+      while(!scanStop && !code && Date.now() < deadline){
+        try{ const f = await det.detect(video); if(f.length) code = f[0].rawValue; }catch(_){}
+        if(!code) await new Promise(r=>setTimeout(r, 250));
+      }
+    } else {
+      const { BrowserMultiFormatReader } = await import("https://esm.sh/@zxing/browser@0.1.5");
+      const reader = new BrowserMultiFormatReader();
+      code = await new Promise(res => {
+        let done = false;
+        const finish = (v, controls) => { if(done) return; done = true; try{ controls && controls.stop(); }catch(_){} res(v); };
+        reader.decodeFromVideoElement(video, (result, err, controls) => {
+          if(result) finish(result.getText(), controls);
+          else if(scanStop || Date.now() > deadline) finish(null, controls);
+        }).catch(()=>finish(null));
+      });
+    }
+  }catch(err){
+    stopScan();
+    toast("⚠ Caméra indisponible ou accès refusé");
+    return;
+  }
+  stopScan();
+  if(!code){ toast("Aucun code-barres détecté"); return; }
+  box.innerHTML = `<p class="note">🛒 Code ${esc(code)} — recherche du produit…</p>`;
+  try{
+    const r = await fetchT(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,nutriments,serving_size,serving_quantity`, { headers:{ "User-Agent":"CutTracker/1.0" } }, 9000);
+    const d = await r.json();
+    const p0 = d && d.product;
+    if(!p0 || !p0.nutriments || p0.nutriments["energy-kcal_100g"] == null){
+      box.innerHTML = '<p class="note" style="color:var(--warn)">Produit inconnu de la base OpenFoodFacts. Utilise la recherche ou la saisie manuelle.</p>';
+      return;
+    }
+    const name = (p0.product_name || ("Produit " + code)) + (p0.brands ? (" · " + p0.brands.split(",")[0]) : "");
+    selectProduct(name, p0.nutriments, null, parseFloat(p0.serving_quantity) || null);
+  }catch(e){
+    box.innerHTML = '<p class="note" style="color:var(--red)">Erreur réseau pendant la recherche du produit. Réessaie.</p>';
+  }
+};
 
 // ── PWA ───────────────────────────────────────────────
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
