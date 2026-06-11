@@ -168,8 +168,18 @@
           <div id="trend" class="mono dim" style="font-size:24px;font-weight:700">—</div>
         </div>
       </div>
-      <svg id="spark" viewBox="0 0 260 80" style="width:100%;height:80px" preserveAspectRatio="none"></svg>
+      <div id="wPeriod" style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="tabbtn" data-p="7">7 j</button>
+        <button class="tabbtn on" data-p="30">30 j</button>
+        <button class="tabbtn" data-p="90">90 j</button>
+        <button class="tabbtn" data-p="0">Tout</button>
+      </div>
+      <svg id="weightChart" viewBox="0 0 300 160" style="width:100%;height:172px"></svg>
       <div id="trendMsg" class="note hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"></div>
+    </div>
+    <div class="card">
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">📋 Journal des pesées</div>
+      <div id="weightList"></div>
     </div>
     <p class="note" style="text-align:center;margin-top:16px;line-height:1.6">
       Douleur tendineuse qui revient → remonte les calories vers la maintenance.<br>Le tendon passe avant l'esthétique.
@@ -261,12 +271,14 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v23", APP_BUILD = "07/06/2026 · rappels";
+const APP_VERSION = "v24", APP_BUILD = "11/06/2026 · journal pesées";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
 try{ GOALS = Object.assign(GOALS, JSON.parse(localStorage.getItem("goals")||"{}")); }catch(_){}
 let KCAL_T = GOALS.kcal, PROT_T = GOALS.prot;
+const WEIGHT_GOAL = 70;   // kg — objectif
+let weightPeriod = 30;    // jours affichés sur le graphe de poids
 const STAPLES = [
   ["Fromage blanc 0% (100g)",47,8,4,0],["Œuf (1)",72,6,0,5],["Poulet grillé (100g)",165,31,0,4],
   ["Riz cuit (100g)",130,3,28,0],["Saumon (100g)",208,20,0,13],["Whey (1 dose 30g)",113,24,2,1],
@@ -1066,14 +1078,8 @@ function renderWeights(){
   const T=$("trend");
   T.textContent = tr==null ? "—" : (tr>0?"+":"")+tr.toFixed(2);
   T.style.color = tr==null?"var(--dim)":tr<=-0.7?"var(--warn)":tr<0?"var(--good)":"var(--red)";
-  // sparkline
-  const pts = weights.slice(-21);
-  const svg = $("spark");
-  if(pts.length>=2){
-    const xs=pts.map(p=>+p.kg), mn=Math.min(...xs), mx=Math.max(...xs), rg=(mx-mn)||1, W=260,H=56;
-    const poly = pts.map((p,i)=>`${(i/(pts.length-1)*W).toFixed(1)},${(H-((+p.kg-mn)/rg)*(H-8)-4).toFixed(1)}`).join(" ");
-    svg.innerHTML = `<polyline points="${poly}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
-  } else svg.innerHTML="";
+  renderWeightChart();
+  renderWeightList();
   const M=$("trendMsg");
   if(tr!=null){
     M.classList.remove("hidden");
@@ -1150,6 +1156,124 @@ $("scanBtn").onclick = async () => {
     box.innerHTML = '<p class="note" style="color:var(--red)">Erreur réseau pendant la recherche du produit. Réessaie.</p>';
   }
 };
+
+// ── PWA ───────────────────────────────────────────────
+// Sélecteur de période du graphe de poids
+$("wPeriod").querySelectorAll("[data-p]").forEach(b=>{
+  b.onclick = () => {
+    weightPeriod = +b.dataset.p;
+    $("wPeriod").querySelectorAll("[data-p]").forEach(x=>x.classList.toggle("on", x===b));
+    renderWeightChart();
+  };
+});
+
+function renderWeightChart(){
+  const svg = $("weightChart"); if(!svg) return;
+  const all = weights.map(w=>({day:w.day, kg:+w.kg})).filter(p=>!isNaN(p.kg)).sort((a,b)=>a.day.localeCompare(b.day));
+  // moyenne mobile lissée (7 dernières pesées)
+  const maFull = all.map((p,i)=>{ const s=all.slice(Math.max(0,i-6),i+1); return s.reduce((a,b)=>a+b.kg,0)/s.length; });
+  let idx0 = 0;
+  if(weightPeriod){
+    const cutoff = new Date(Date.now()-(weightPeriod-1)*864e5).toISOString().slice(0,10);
+    idx0 = all.findIndex(p=>p.day>=cutoff);
+    if(idx0<0) idx0 = all.length;
+  }
+  const pts = all.slice(idx0), ma = maFull.slice(idx0);
+  if(pts.length===0){ svg.innerHTML = `<text x="150" y="82" text-anchor="middle" font-size="11" fill="var(--dim)">Aucune pesée sur cette période</text>`; return; }
+  const W=300,H=160, padL=30, padR=10, padT=12, padB=22;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  const kgs = pts.map(p=>p.kg);
+  let yMin = Math.min(WEIGHT_GOAL, ...kgs), yMax = Math.max(WEIGHT_GOAL, ...kgs);
+  const pad = Math.max(0.4,(yMax-yMin)*0.12); yMin-=pad; yMax+=pad;
+  const rg = (yMax-yMin)||1;
+  const X = i => padL + (pts.length===1 ? plotW/2 : (i/(pts.length-1))*plotW);
+  const Y = kg => padT + (1-(kg-yMin)/rg)*plotH;
+  let out = "";
+  [yMax,(yMin+yMax)/2,yMin].forEach(v=>{
+    const y=Y(v);
+    out+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+    out+=`<text x="${padL-4}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="8" fill="var(--dim)" font-family="var(--mono)">${v.toFixed(1)}</text>`;
+  });
+  if(WEIGHT_GOAL>=yMin && WEIGHT_GOAL<=yMax){
+    const yo=Y(WEIGHT_GOAL);
+    out+=`<line x1="${padL}" y1="${yo.toFixed(1)}" x2="${W-padR}" y2="${yo.toFixed(1)}" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3" opacity=".85"/>`;
+    out+=`<text x="${W-padR}" y="${(yo-3).toFixed(1)}" text-anchor="end" font-size="8" fill="var(--accent)">objectif ${WEIGHT_GOAL}kg</text>`;
+  }
+  if(pts.length>1){
+    const raw = pts.map((p,i)=>`${X(i).toFixed(1)},${Y(p.kg).toFixed(1)}`).join(" ");
+    out+=`<polyline points="${raw}" fill="none" stroke="var(--dim)" stroke-width="1" opacity=".4"/>`;
+  }
+  pts.forEach((p,i)=>{ out+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.kg).toFixed(1)}" r="2" fill="var(--dim)"/>`; });
+  if(ma.length>1){
+    const mp = ma.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    out+=`<polyline points="${mp}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  const lp = pts[pts.length-1];
+  out+=`<circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(lp.kg).toFixed(1)}" r="3.2" fill="var(--accent)"/>`;
+  out+=`<text x="${(X(pts.length-1)-2).toFixed(1)}" y="${(Y(lp.kg)-6).toFixed(1)}" text-anchor="end" font-size="9.5" font-weight="700" fill="var(--txt)" font-family="var(--mono)">${lp.kg.toFixed(1)}</text>`;
+  const fmt = d => { const dt=new Date(d+"T12:00:00"); return dt.getDate()+"/"+(dt.getMonth()+1); };
+  out+=`<text x="${padL}" y="${H-6}" text-anchor="start" font-size="8" fill="var(--dim)">${fmt(pts[0].day)}</text>`;
+  if(pts.length>1) out+=`<text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="8" fill="var(--dim)">${fmt(lp.day)}</text>`;
+  svg.innerHTML = out;
+}
+
+function renderWeightList(){
+  const c = $("weightList"); if(!c) return;
+  if(!weights.length){ c.innerHTML='<p class="note" style="margin:0">Aucune pesée enregistrée. Ajoute ta première pesée ci-dessus.</p>'; return; }
+  const sorted = weights.map(w=>({day:w.day, kg:+w.kg})).sort((a,b)=>b.day.localeCompare(a.day));
+  c.innerHTML="";
+  sorted.forEach((w,i)=>{
+    const prev = sorted[i+1];               // pesée chronologiquement précédente
+    const delta = prev ? (w.kg - prev.kg) : null;
+    const dStr = delta==null ? "" : (delta>0?"+":"")+delta.toFixed(1)+" kg";
+    const dCol = delta==null ? "var(--dim)" : delta<0 ? "var(--good)" : delta>0 ? "var(--red)" : "var(--dim)";
+    const row = document.createElement("div");
+    row.className="entry"; row.style.cssText="display:flex;align-items:center;gap:8px;padding:10px 12px";
+    row.innerHTML = `
+      <div style="flex:1;min-width:0">
+        <span class="mono" style="font-size:17px;font-weight:700">${w.kg.toFixed(1)}<span class="dim" style="font-size:11px;font-weight:400"> kg</span></span>
+        ${dStr?`<span class="mono" style="font-size:11px;margin-left:8px;color:${dCol}">${dStr}</span>`:""}
+        <div class="dim" style="font-size:11px;margin-top:2px;text-transform:capitalize">${fmtDay(w.day)}</div>
+      </div>
+      <button class="x editW" data-day="${w.day}" data-kg="${w.kg}" title="Modifier" style="font-size:15px;padding:6px 8px">✎</button>
+      <button class="x delW" data-day="${w.day}" title="Supprimer" style="font-size:18px;padding:6px 8px">×</button>`;
+    c.appendChild(row);
+  });
+  c.querySelectorAll(".editW").forEach(b=>b.onclick=()=>startEditWeight(b.dataset.day, +b.dataset.kg, b));
+  c.querySelectorAll(".delW").forEach(b=>b.onclick=()=>confirmDelWeight(b.dataset.day, b));
+}
+
+function startEditWeight(day, kg, btn){
+  const row = btn.closest(".entry");
+  row.innerHTML = `
+    <input class="editWInput" inputmode="decimal" value="${kg.toFixed(1)}" style="flex:1;padding:8px"/>
+    <button class="btn saveW" style="width:auto;padding:8px 14px">✓</button>
+    <button class="chip cancelW" style="padding:8px 12px">✕</button>`;
+  const inp = row.querySelector(".editWInput");
+  setTimeout(()=>{ inp.focus(); inp.select(); }, 30);
+  row.querySelector(".saveW").onclick = async () => {
+    const v = parseFloat((inp.value||"").replace(",","."));
+    if(!v || v<40 || v>200){ toast("⚠ Valeur invalide (40–200 kg)"); return; }
+    const { error } = await sb.from("weights").upsert({ day, kg:v }, { onConflict:"user_id,day" });
+    if(error){ toast("⚠ Échec de la mise à jour"); return; }
+    toast("✅ Pesée mise à jour"); await loadWeights();
+  };
+  row.querySelector(".cancelW").onclick = () => renderWeightList();
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter") row.querySelector(".saveW").click(); });
+}
+
+function confirmDelWeight(day, btn){
+  if(btn.dataset.confirm==="1"){
+    sb.from("weights").delete().eq("day", day).then(async ({error})=>{
+      if(error){ toast("⚠ Échec de la suppression"); return; }
+      toast("🗑 Pesée supprimée"); await loadWeights();
+    });
+    return;
+  }
+  btn.dataset.confirm="1"; btn.textContent="Supprimer ?";
+  btn.style.color="var(--red)"; btn.style.fontWeight="700"; btn.style.fontSize="12px";
+  setTimeout(()=>{ if(document.body.contains(btn)) renderWeightList(); }, 3000);
+}
 
 // ── PWA ───────────────────────────────────────────────
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
