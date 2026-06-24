@@ -164,7 +164,7 @@
           <div class="mono" style="font-size:24px;font-weight:700"><span id="avg7">—</span><span class="dim" style="font-size:13px"> kg</span></div>
         </div>
         <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
-          <div class="dim" style="font-size:11px;margin-bottom:4px">Tendance / sem.</div>
+          <div class="dim" style="font-size:11px;margin-bottom:4px">Perdu / sem. (kg)</div>
           <div id="trend" class="mono dim" style="font-size:24px;font-weight:700">—</div>
         </div>
       </div>
@@ -271,7 +271,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v24", APP_BUILD = "11/06/2026 · journal pesées";
+const APP_VERSION = "v25", APP_BUILD = "11/06/2026 · poids perdu 7j";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -1069,24 +1069,55 @@ function renderCoach(tot){
   const dayIdx = Math.floor(Date.now()/864e5);
   $("coachTip").textContent = "💡 " + COACH_TIPS[dayIdx % COACH_TIPS.length];
 }
+// Stats poids basées sur les JOURS CALENDAIRES (pas le nombre de pesées)
+function weightStats(){
+  const s = weights.map(w=>({day:w.day, kg:+w.kg})).filter(p=>!isNaN(p.kg)).sort((a,b)=>a.day.localeCompare(b.day));
+  if(!s.length) return { avg7:null, lossWeek:null, change:null, spanDays:null, fromKg:null, toKg:null };
+  const last = s[s.length-1];
+  const lastDate = new Date(last.day+"T12:00:00");
+  // Moyenne des pesées des 7 derniers jours calendaires (fenêtre glissante)
+  const cut7 = new Date(lastDate); cut7.setDate(cut7.getDate()-6);
+  const win = s.filter(p => new Date(p.day+"T12:00:00") >= cut7);
+  const avg7 = win.reduce((a,b)=>a+b.kg,0)/win.length;
+  // Poids perdu : pesée la plus proche de 7 jours avant la dernière, normalisé sur 7 j
+  let lossWeek=null, change=null, spanDays=null, fromKg=null;
+  if(s.length>=2){
+    const target = new Date(lastDate); target.setDate(target.getDate()-7);
+    let ref=null, best=Infinity;
+    for(const p of s.slice(0,-1)){
+      const d = Math.abs(new Date(p.day+"T12:00:00") - target);
+      if(d<=best){ best=d; ref=p; }
+    }
+    spanDays = Math.round((lastDate - new Date(ref.day+"T12:00:00"))/864e5);
+    if(spanDays>=1){ change = last.kg - ref.kg; fromKg = ref.kg; lossWeek = change/spanDays*7; }
+  }
+  return { avg7, lossWeek, change, spanDays, fromKg, toKg:last.kg };
+}
+
 function renderWeights(){
-  const last7 = weights.slice(-7), prev = weights.slice(-14,-7);
-  const avg = last7.length ? last7.reduce((s,w)=>s+(+w.kg),0)/last7.length : null;
-  const pavg = prev.length>=3 ? prev.reduce((s,w)=>s+(+w.kg),0)/prev.length : null;
-  const tr = avg!=null&&pavg!=null ? avg-pavg : null;
-  $("avg7").textContent = avg!=null ? avg.toFixed(1) : "—";
+  const st = weightStats();
+  $("avg7").textContent = st.avg7!=null ? st.avg7.toFixed(1) : "—";
   const T=$("trend");
-  T.textContent = tr==null ? "—" : (tr>0?"+":"")+tr.toFixed(2);
-  T.style.color = tr==null?"var(--dim)":tr<=-0.7?"var(--warn)":tr<0?"var(--good)":"var(--red)";
+  if(st.lossWeek==null){ T.textContent="—"; T.style.color="var(--dim)"; }
+  else {
+    const lw = st.lossWeek;
+    T.textContent = (lw>0?"+":"")+lw.toFixed(1);
+    T.style.color = lw<=-0.9 ? "var(--warn)" : lw<0 ? "var(--good)" : lw===0 ? "var(--dim)" : "var(--red)";
+  }
   renderWeightChart();
   renderWeightList();
   const M=$("trendMsg");
-  if(tr!=null){
+  if(st.lossWeek!=null){
     M.classList.remove("hidden");
-    M.textContent = tr<=-0.7 ? "⚠ Trop rapide — remonte les calories (~+150). Descendre vite = perte de muscle + risque tendon."
-      : tr<-0.2 ? "✓ Rythme idéal. Ne touche à rien."
-      : tr<0 ? "Lent. Si ça dure 2 sem., retire ~150 kcal."
-      : "Stagnation/hausse. Si 2 sem. ainsi, retire ~150 kcal — sauf si douleur tendineuse : alors on garde.";
+    const lw = st.lossWeek;
+    const head = st.change<0 ? `📉 Tu as perdu ${Math.abs(st.change).toFixed(1)} kg en ${st.spanDays} j (${st.fromKg.toFixed(1)} → ${st.toKg.toFixed(1)} kg) — soit ${Math.abs(lw).toFixed(1)} kg/sem.`
+      : st.change>0 ? `📈 +${st.change.toFixed(1)} kg en ${st.spanDays} j (${st.fromKg.toFixed(1)} → ${st.toKg.toFixed(1)} kg) — soit +${lw.toFixed(1)} kg/sem.`
+      : `➖ Poids stable sur ${st.spanDays} j (${st.toKg.toFixed(1)} kg).`;
+    const advice = lw<=-0.9 ? " ⚠ Trop rapide — remonte les calories (~+150). Descendre vite = perte de muscle + risque tendon."
+      : lw<-0.2 ? " ✓ Rythme idéal, ne touche à rien."
+      : lw<0 ? " Lent : si ça dure 2 sem., retire ~150 kcal."
+      : " Stagnation/hausse : si 2 sem. ainsi, retire ~150 kcal — sauf douleur tendineuse, alors on garde.";
+    M.textContent = head + advice;
   } else M.classList.add("hidden");
 }
 
@@ -1178,8 +1209,9 @@ function renderWeightChart(){
     idx0 = all.findIndex(p=>p.day>=cutoff);
     if(idx0<0) idx0 = all.length;
   }
-  const pts = all.slice(idx0), ma = maFull.slice(idx0);
-  if(pts.length===0){ svg.innerHTML = `<text x="150" y="82" text-anchor="middle" font-size="11" fill="var(--dim)">Aucune pesée sur cette période</text>`; return; }
+  let pts = all.slice(idx0), ma = maFull.slice(idx0), widened=false;
+  if(pts.length===0 && all.length){ pts = all; ma = maFull; widened = true; } // pas de pesée dans la période → on montre tout l'historique
+  if(pts.length===0){ svg.innerHTML = `<text x="150" y="82" text-anchor="middle" font-size="11" fill="var(--dim)">Aucune pesée enregistrée</text>`; return; }
   const W=300,H=160, padL=30, padR=10, padT=12, padB=22;
   const plotW = W-padL-padR, plotH = H-padT-padB;
   const kgs = pts.map(p=>p.kg);
@@ -1214,6 +1246,7 @@ function renderWeightChart(){
   const fmt = d => { const dt=new Date(d+"T12:00:00"); return dt.getDate()+"/"+(dt.getMonth()+1); };
   out+=`<text x="${padL}" y="${H-6}" text-anchor="start" font-size="8" fill="var(--dim)">${fmt(pts[0].day)}</text>`;
   if(pts.length>1) out+=`<text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="8" fill="var(--dim)">${fmt(lp.day)}</text>`;
+  if(widened) out+=`<text x="150" y="9" text-anchor="middle" font-size="7.5" fill="var(--warn)">aucune pesée sur la période — historique complet affiché</text>`;
   svg.innerHTML = out;
 }
 
