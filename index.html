@@ -271,7 +271,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v27", APP_BUILD = "28/06/2026 · période pilote tout";
+const APP_VERSION = "v28", APP_BUILD = "28/06/2026 · maj auto";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -1323,8 +1323,27 @@ function confirmDelWeight(day, btn){
   setTimeout(()=>{ if(document.body.contains(btn)) renderWeightList(); }, 3000);
 }
 
-// ── PWA ───────────────────────────────────────────────
-if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+// ── PWA + MISE À JOUR AUTO ─────────────────────────────
+if("serviceWorker" in navigator){
+  let reloaded = false;
+  // Quand un nouveau service worker prend le contrôle → recharge une fois pour afficher la nouvelle version
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if(reloaded) return; reloaded = true; location.reload();
+  });
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    // Vérifie une mise à jour à chaque ouverture + au retour au premier plan
+    reg.update();
+    document.addEventListener("visibilitychange", () => { if(!document.hidden) reg.update(); });
+    reg.addEventListener("updatefound", () => {
+      const nw = reg.installing;
+      if(!nw) return;
+      nw.addEventListener("statechange", () => {
+        // Nouvelle version installée alors qu'une ancienne tournait → on l'active (skipWaiting fait le reste)
+        if(nw.state === "installed" && navigator.serviceWorker.controller){ toast("🔄 Mise à jour…"); }
+      });
+    });
+  }).catch(()=>{});
+}
 </script>
 </body>
 </html>
