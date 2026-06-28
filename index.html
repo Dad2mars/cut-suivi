@@ -149,7 +149,7 @@
       <p class="note" style="margin-bottom:0">Vert = dans l'objectif · Orange = dépassement · Ligne pointillée = ton objectif</p>
     </div>
     <div class="card">
-      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">📋 Bilan des 7 derniers jours</div>
+      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">🍽 Bilan repas · 7 jours</div>
       <div id="weekReview" class="note" style="font-size:13px;line-height:1.6"></div>
     </div>
     <div class="card">
@@ -168,6 +168,7 @@
           <div id="trend" class="mono dim" style="font-size:24px;font-weight:700">—</div>
         </div>
       </div>
+      <div id="totalLost" class="hidden" style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.4"></div>
       <div id="wPeriod" style="display:flex;gap:6px;margin-bottom:10px">
         <button class="tabbtn" data-p="7">7 j</button>
         <button class="tabbtn on" data-p="30">30 j</button>
@@ -271,7 +272,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v28", APP_BUILD = "28/06/2026 · maj auto";
+const APP_VERSION = "v29", APP_BUILD = "28/06/2026 · total perdu";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -477,7 +478,7 @@ async function loadHistory(){
   }
   const w = $("weekReview");
   if(w){
-    if(!n){ w.textContent = "Pas encore de données cette semaine."; }
+    if(!n){ w.textContent = "Aucun repas loggé cette semaine (le suivi du poids est plus bas)."; }
     else {
       const avgK = Math.round(totK/n), avgP = Math.round(totP/n);
       let verdict;
@@ -1091,7 +1092,9 @@ function weightStats(){
     spanDays = Math.round((lastDate - new Date(ref.day+"T12:00:00"))/864e5);
     if(spanDays>=1){ change = last.kg - ref.kg; fromKg = ref.kg; lossWeek = change/spanDays*7; }
   }
-  return { avg7, lossWeek, change, spanDays, fromKg, toKg:last.kg };
+  const first = s[0];
+  const totalLost = first.kg - last.kg; // positif = perdu depuis le début
+  return { avg7, lossWeek, change, spanDays, fromKg, toKg:last.kg, firstKg:first.kg, firstDay:first.day, totalLost, count:s.length };
 }
 
 function renderWeights(){
@@ -1102,6 +1105,19 @@ function renderWeights(){
   $("avg7").textContent = avgP!=null ? avgP.toFixed(1) : "—";
   // Perte hebdomadaire (indépendante de la période, sur ~7 derniers jours réels)
   const st = weightStats();
+  // Total perdu depuis le début
+  const TL = $("totalLost");
+  if(TL){
+    if(st.count>=2 && st.firstKg!=null){
+      TL.classList.remove("hidden");
+      const tot = st.totalLost;
+      const word = tot>0 ? "perdu" : tot<0 ? "pris" : "stable";
+      const col = tot>0 ? "var(--good)" : tot<0 ? "var(--red)" : "var(--dim)";
+      const sign = tot>0 ? "−" : tot<0 ? "+" : "";
+      const fd = new Date(st.firstDay+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});
+      TL.innerHTML = `🏆 Total ${word} : <b style="color:${col};font-size:16px">${sign}${Math.abs(tot).toFixed(1)} kg</b><br><span class="dim" style="font-size:11px">depuis le ${fd} · ${st.firstKg.toFixed(1)} → ${st.toKg.toFixed(1)} kg</span>`;
+    } else TL.classList.add("hidden");
+  }
   const T=$("trend");
   if(st.lossWeek==null){ T.textContent="—"; T.style.color="var(--dim)"; }
   else {
@@ -1214,16 +1230,16 @@ function weightsInPeriod(){
 function renderWeightChart(){
   const svg = $("weightChart"); if(!svg) return;
   const all = weights.map(w=>({day:w.day, kg:+w.kg})).filter(p=>!isNaN(p.kg)).sort((a,b)=>a.day.localeCompare(b.day));
-  // moyenne mobile lissée (7 dernières pesées)
-  const maFull = all.map((p,i)=>{ const s=all.slice(Math.max(0,i-6),i+1); return s.reduce((a,b)=>a+b.kg,0)/s.length; });
   let idx0 = 0;
   if(weightPeriod){
     const cutoff = new Date(Date.now()-(weightPeriod-1)*864e5).toISOString().slice(0,10);
     idx0 = all.findIndex(p=>p.day>=cutoff);
     if(idx0<0) idx0 = all.length;
   }
-  let pts = all.slice(idx0), ma = maFull.slice(idx0), widened=false;
-  if(pts.length===0 && all.length){ pts = all; ma = maFull; widened = true; } // pas de pesée dans la période → on montre tout l'historique
+  let pts = all.slice(idx0), widened=false;
+  if(pts.length===0 && all.length){ pts = all; widened = true; } // pas de pesée dans la période → on montre tout l'historique
+  // Moyenne lissée calculée SUR LES POINTS VISIBLES → la courbe suit les pesées affichées
+  const ma = pts.map((p,i)=>{ const s=pts.slice(Math.max(0,i-6),i+1); return s.reduce((a,b)=>a+b.kg,0)/s.length; });
   if(pts.length===0){ svg.innerHTML = `<text x="150" y="82" text-anchor="middle" font-size="11" fill="var(--dim)">Aucune pesée enregistrée</text>`; return; }
   const W=300,H=160, padL=30, padR=10, padT=12, padB=22;
   const plotW = W-padL-padR, plotH = H-padT-padB;
@@ -1244,15 +1260,13 @@ function renderWeightChart(){
     out+=`<line x1="${padL}" y1="${yo.toFixed(1)}" x2="${W-padR}" y2="${yo.toFixed(1)}" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3" opacity=".85"/>`;
     out+=`<text x="${W-padR}" y="${(yo-3).toFixed(1)}" text-anchor="end" font-size="8" fill="var(--accent)">objectif ${WEIGHT_GOAL}kg</text>`;
   }
-  if(pts.length>1){
-    const raw = pts.map((p,i)=>`${X(i).toFixed(1)},${Y(p.kg).toFixed(1)}`).join(" ");
-    out+=`<polyline points="${raw}" fill="none" stroke="var(--dim)" stroke-width="1" opacity=".4"/>`;
-  }
-  pts.forEach((p,i)=>{ out+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.kg).toFixed(1)}" r="2" fill="var(--dim)"/>`; });
+  // Courbe lissée (tendance) qui suit les pesées visibles
   if(ma.length>1){
     const mp = ma.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
     out+=`<polyline points="${mp}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
   }
+  // Pesées réelles (points)
+  pts.forEach((p,i)=>{ out+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.kg).toFixed(1)}" r="2.2" fill="var(--accent)" opacity=".55"/>`; });
   const lp = pts[pts.length-1];
   out+=`<circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(lp.kg).toFixed(1)}" r="3.2" fill="var(--accent)"/>`;
   out+=`<text x="${(X(pts.length-1)-2).toFixed(1)}" y="${(Y(lp.kg)-6).toFixed(1)}" text-anchor="end" font-size="9.5" font-weight="700" fill="var(--txt)" font-family="var(--mono)">${lp.kg.toFixed(1)}</text>`;
