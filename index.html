@@ -160,7 +160,7 @@
       </div>
       <div style="display:flex;gap:12px;margin-bottom:16px">
         <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
-          <div class="dim" style="font-size:11px;margin-bottom:4px">Moyenne 7 jours</div>
+          <div id="avgLabel" class="dim" style="font-size:11px;margin-bottom:4px">Moy. 30 j</div>
           <div class="mono" style="font-size:24px;font-weight:700"><span id="avg7">—</span><span class="dim" style="font-size:13px"> kg</span></div>
         </div>
         <div style="flex:1;background:var(--bg);border-radius:12px;padding:14px">
@@ -271,7 +271,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v25", APP_BUILD = "11/06/2026 · poids perdu 7j";
+const APP_VERSION = "v26", APP_BUILD = "11/06/2026 · période pilote tout";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -1095,8 +1095,13 @@ function weightStats(){
 }
 
 function renderWeights(){
+  // Moyenne SUR LA PÉRIODE sélectionnée (réagit aux boutons 7j/30j/90j/Tout)
+  const inP = weightsInPeriod();
+  const avgP = inP.length ? inP.reduce((a,b)=>a+b.kg,0)/inP.length : null;
+  $("avgLabel").textContent = weightPeriod ? `Moy. ${weightPeriod} j (${inP.length})` : `Moy. tout (${inP.length})`;
+  $("avg7").textContent = avgP!=null ? avgP.toFixed(1) : "—";
+  // Perte hebdomadaire (indépendante de la période, sur ~7 derniers jours réels)
   const st = weightStats();
-  $("avg7").textContent = st.avg7!=null ? st.avg7.toFixed(1) : "—";
   const T=$("trend");
   if(st.lossWeek==null){ T.textContent="—"; T.style.color="var(--dim)"; }
   else {
@@ -1194,9 +1199,17 @@ $("wPeriod").querySelectorAll("[data-p]").forEach(b=>{
   b.onclick = () => {
     weightPeriod = +b.dataset.p;
     $("wPeriod").querySelectorAll("[data-p]").forEach(x=>x.classList.toggle("on", x===b));
-    renderWeightChart();
+    renderWeights();   // met à jour graphe + historique + moyenne ensemble
   };
 });
+
+// Pesées comprises dans la période sélectionnée (triées du plus ancien au plus récent)
+function weightsInPeriod(){
+  const s = weights.map(w=>({day:w.day, kg:+w.kg})).filter(p=>!isNaN(p.kg)).sort((a,b)=>a.day.localeCompare(b.day));
+  if(!weightPeriod) return s;
+  const cut = new Date(Date.now()-(weightPeriod-1)*864e5).toISOString().slice(0,10);
+  return s.filter(p=>p.day>=cut);
+}
 
 function renderWeightChart(){
   const svg = $("weightChart"); if(!svg) return;
@@ -1253,7 +1266,9 @@ function renderWeightChart(){
 function renderWeightList(){
   const c = $("weightList"); if(!c) return;
   if(!weights.length){ c.innerHTML='<p class="note" style="margin:0">Aucune pesée enregistrée. Ajoute ta première pesée ci-dessus.</p>'; return; }
-  const sorted = weights.map(w=>({day:w.day, kg:+w.kg})).sort((a,b)=>b.day.localeCompare(a.day));
+  // Historique filtré sur la période sélectionnée (réagit aux boutons)
+  const sorted = weightsInPeriod().sort((a,b)=>b.day.localeCompare(a.day));
+  if(!sorted.length){ c.innerHTML=`<p class="note" style="margin:0">Aucune pesée sur cette période (${weights.length} au total). Choisis « Tout » pour voir l'historique complet.</p>`; return; }
   c.innerHTML="";
   sorted.forEach((w,i)=>{
     const prev = sorted[i+1];               // pesée chronologiquement précédente
