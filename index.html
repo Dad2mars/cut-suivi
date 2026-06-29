@@ -179,7 +179,7 @@
       <div id="trendMsg" class="note hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"></div>
     </div>
     <div class="card">
-      <div class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">📋 Journal des pesées</div>
+      <div id="weightListTitle" class="mono dim" style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">📋 Journal des pesées</div>
       <div id="weightList"></div>
     </div>
     <p class="note" style="text-align:center;margin-top:16px;line-height:1.6">
@@ -272,7 +272,7 @@ const SUPABASE_URL  = "https://sfuqazbklyykwpwvdiql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_EWF7whP3qlsJ-diV4drbvg_TnIR9bTk";
 // ═════════════════════════════════════════════════════
 
-const APP_VERSION = "v29", APP_BUILD = "28/06/2026 · total perdu";
+const APP_VERSION = "v30", APP_BUILD = "28/06/2026 · journal complet";
 document.getElementById("verLogin").textContent = `Version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 document.getElementById("verApp").textContent = `Cut · Suivi — version ${APP_VERSION} · mise à jour ${APP_BUILD}`;
 let GOALS = {kcal:1950, prot:150};
@@ -1279,10 +1279,11 @@ function renderWeightChart(){
 
 function renderWeightList(){
   const c = $("weightList"); if(!c) return;
-  if(!weights.length){ c.innerHTML='<p class="note" style="margin:0">Aucune pesée enregistrée. Ajoute ta première pesée ci-dessus.</p>'; return; }
-  // Historique filtré sur la période sélectionnée (réagit aux boutons)
-  const sorted = weightsInPeriod().sort((a,b)=>b.day.localeCompare(a.day));
-  if(!sorted.length){ c.innerHTML=`<p class="note" style="margin:0">Aucune pesée sur cette période (${weights.length} au total). Choisis « Tout » pour voir l'historique complet.</p>`; return; }
+  const title = $("weightListTitle");
+  if(!weights.length){ if(title) title.textContent="📋 Journal des pesées"; c.innerHTML='<p class="note" style="margin:0">Aucune pesée enregistrée. Ajoute ta première pesée ci-dessus.</p>'; return; }
+  // Historique COMPLET (toutes les pesées), du plus récent au plus ancien
+  const sorted = weights.map(w=>({day:w.day, kg:+w.kg})).filter(p=>!isNaN(p.kg)).sort((a,b)=>b.day.localeCompare(a.day));
+  if(title) title.textContent = `📋 Journal des pesées (${sorted.length})`;
   c.innerHTML="";
   sorted.forEach((w,i)=>{
     const prev = sorted[i+1];               // pesée chronologiquement précédente
